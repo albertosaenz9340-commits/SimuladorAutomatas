@@ -9,6 +9,7 @@
 - Alberto Mario Sáenz Molina
 - Aaron Levi Medina Medina
 - Camilo Andres Maldonado Duarte
+- Jhon Ramírez Salgado
 
 ### Descripción general
 
@@ -432,3 +433,4 @@ Además se verificaron las nueve condiciones de validación, el reemplazo de la 
 - Alberto Mario Sáenz Molina
 - Aaron Levi Medina Medina
 - Camilo Andres Maldonado Duarte
+- Jhon Ramírez Salgado
