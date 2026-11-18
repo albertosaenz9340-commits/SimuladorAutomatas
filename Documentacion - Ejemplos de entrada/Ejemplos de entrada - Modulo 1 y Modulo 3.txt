@@ -1,0 +1,38 @@
+Datos de entrada
+Nombre: Cantidad par de ceros
+Descripción: Acepta las palabras con un número par de símbolos 0.
+
+Conjunto Q (estados)
+q0, q1
+
+Alfabeto Σ
+0, 1
+
+Estado inicial
+q0
+
+Estados finales F
+q0
+
+Función de transición δ
+Origen	Símbolo	Destino
+q0	0	q1
+q0	1	q0
+q1	0	q0
+q1	1	q1
+
+Representación formal
+M = ({q0, q1}, {0, 1}, δ, q0, {q0})
+
+Resultados esperados
+- Acepta: ε, 00, 11, 0000, 010, 1010, 0011, ... (número par de 0)
+- Rechaza: 0, 000, 01, 10, 011, ... (número impar de 0)
+
+Recordatorio: en el Módulo 1 puedes cargarlo directamente eligiendo «Cantidad par de ceros» en el desplegable «Caso» y pulsando Cargar, o introducir los datos manualmente con los valores de arriba y pulsar VALIDAR Y CONSTRUIR.
+
+Entradas de palabra — Módulo 3
+00
+0
+ε
+1010
+2
