@@ -21,11 +21,15 @@ public sealed class ResultadoValidacion
 }
 
 /// <summary>
-/// Comprueba que la terna M = (Q, Σ, δ) sea un AFD completo, y que la
-/// configuración de aceptación (q0, F) referencie estados de Q.
+/// Comprueba que la terna M = (Q, Σ, δ) sea un AFD completo con exactamente
+/// cinco estados en Q, y que la configuración de aceptación (q0, F) referencie
+/// estados de Q.
 /// </summary>
 public sealed class ValidacionAutomataService
 {
+    /// <summary>Cantidad de estados (nodos) exigida en Q.</summary>
+    public const int CantidadEstadosRequerida = 5;
+
     /// <summary>Valida únicamente la terna M = (Q, Σ, δ).</summary>
     public ResultadoValidacion ValidarDefinicion(
         IReadOnlyList<string> estados,
@@ -34,9 +38,9 @@ public sealed class ValidacionAutomataService
     {
         var errores = new List<string>();
 
-        if (estados.Count == 0)
+        if (estados.Count != CantidadEstadosRequerida)
         {
-            errores.Add("Debe definir al menos un estado (Q no puede estar vacío).");
+            errores.Add($"Debe definir exactamente {CantidadEstadosRequerida} estados (Q debe tener 5 nodos).");
         }
 
         if (alfabeto.Count == 0)

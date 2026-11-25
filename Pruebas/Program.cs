@@ -274,18 +274,19 @@ Console.WriteLine("=== MÓDULO 2: búsqueda de palabras ===");
 Automata a1 = casos[0].CrearAutomata();
 ResultadoBusqueda r1 = buscador.Buscar(a1, c1);
 ComprobarSecuencia("Autómata 1 — cinco palabras más cortas",
-    r1.Palabras.Select(p => p.Palabra), new[] { "", "1", "00", "11", "001" });
+    r1.Palabras.Select(p => p.Palabra), new[] { "", "1", "11", "111", "1111" });
 ComprobarSecuencia("Autómata 1 — longitudes",
-    r1.Palabras.Select(p => p.Longitud.ToString()), new[] { "0", "1", "2", "2", "3" });
-ComprobarSecuencia("Autómata 1 — recorrido de 001",
-    r1.Palabras.Last().Recorrido, new[] { "q0", "q1", "q0", "q0" });
+    r1.Palabras.Select(p => p.Longitud.ToString()), new[] { "0", "1", "2", "3", "4" });
+ComprobarSecuencia("Autómata 1 — recorrido de 00000",
+    reconocedor.Procesar(a1, c1, "00000").RecorridoEstados,
+    new[] { "q0", "q1", "q2", "q3", "q4", "q0" });
 
 Automata a2 = casos[1].CrearAutomata();
 ResultadoBusqueda r2 = buscador.Buscar(a2, c2);
 ComprobarSecuencia("Autómata 2 — cinco palabras más cortas",
-    r2.Palabras.Select(p => p.Palabra), new[] { "ab", "aab", "bab", "aaab", "abab" });
-ComprobarSecuencia("Autómata 2 — recorrido de ab",
-    r2.Palabras.First().Recorrido, new[] { "s0", "s1", "s2" });
+    r2.Palabras.Select(p => p.Palabra), new[] { "abab", "aabab", "babab", "aaabab", "ababab" });
+ComprobarSecuencia("Autómata 2 — recorrido de abab",
+    r2.Palabras.First().Recorrido, new[] { "s0", "s1", "s2", "s3", "s4" });
 
 Automata a3 = casos[2].CrearAutomata();
 ResultadoBusqueda r3 = buscador.Buscar(a3, c3);
@@ -311,12 +312,13 @@ void Reconocimiento(Automata automata, ConfiguracionAceptacion configuracion, st
         $"entrada válida={resultado.EntradaValida}, aceptada={resultado.Aceptada}");
 }
 
-Reconocimiento(a1, c1, "0110", true, "Autómata 1");
-Reconocimiento(a1, c1, "1011", false, "Autómata 1");
+Reconocimiento(a1, c1, "00000", true, "Autómata 1");
+Reconocimiento(a1, c1, "0000", false, "Autómata 1");
 Reconocimiento(a1, c1, "ε", true, "Autómata 1");
+Reconocimiento(a1, c1, "1111", true, "Autómata 1");
 Reconocimiento(a2, c2, "abab", true, "Autómata 2");
 Reconocimiento(a2, c2, "aba", false, "Autómata 2");
-Reconocimiento(a2, c2, "bab", true, "Autómata 2");
+Reconocimiento(a2, c2, "babab", true, "Autómata 2");
 Reconocimiento(a2, c2, "bb", false, "Autómata 2");
 Reconocimiento(a2, c2, "", false, "Autómata 2");
 Reconocimiento(a4, c4, "aaa", false, "Autómata 4");
@@ -326,50 +328,62 @@ Comprobar("Símbolo inválido 'c' en posición 3",
     !invalida.EntradaValida && invalida.SimboloInvalido == 'c' && invalida.PosicionInvalida == 3,
     $"símbolo={invalida.SimboloInvalido}, posición={invalida.PosicionInvalida}");
 
-ComprobarSecuencia("Recorrido de 0110 en el autómata 1",
-    reconocedor.Procesar(a1, c1, "0110").RecorridoEstados,
-    new[] { "q0", "q1", "q1", "q1", "q0" });
+ComprobarSecuencia("Recorrido de 00000 en el autómata 1",
+    reconocedor.Procesar(a1, c1, "00000").RecorridoEstados,
+    new[] { "q0", "q1", "q2", "q3", "q4", "q0" });
 
 Console.WriteLine("=== VALIDACIONES ===");
 
-ResultadoValidacion sinEstados = validador.Validar(Array.Empty<string>(), new[] { '0' }, "", Array.Empty<string>(), Array.Empty<Transicion>());
-Comprobar("Q vacía detectada", !sinEstados.EsValido && sinEstados.Errores.Any(e => e.Contains("al menos un estado")));
+string[] cincoEstados = { "q0", "q1", "q2", "q3", "q4" };
+Transicion[] transicionesUnSimbolo = cincoEstados.Select(e => new Transicion(e, '0', e)).ToArray();
 
-ResultadoValidacion sinAlfabeto = validador.Validar(new[] { "q0" }, Array.Empty<char>(), "q0", Array.Empty<string>(), Array.Empty<Transicion>());
+ResultadoValidacion sinEstados = validador.Validar(Array.Empty<string>(), new[] { '0' }, "", Array.Empty<string>(), Array.Empty<Transicion>());
+Comprobar("Q vacía detectada", !sinEstados.EsValido && sinEstados.Errores.Any(e => e.Contains("exactamente 5 estados")));
+
+ResultadoValidacion cantidadIncorrecta = validador.Validar(
+    new[] { "q0", "q1", "q2", "q3" }, new[] { '0' }, "q0", Array.Empty<string>(),
+    new[] { new Transicion("q0", '0', "q0"), new Transicion("q1", '0', "q1"),
+            new Transicion("q2", '0', "q2"), new Transicion("q3", '0', "q3") });
+Comprobar("Q con menos de 5 nodos detectada",
+    cantidadIncorrecta.Errores.Any(e => e.Contains("exactamente 5 estados")));
+
+ResultadoValidacion sinAlfabeto = validador.Validar(cincoEstados, Array.Empty<char>(), "q0", Array.Empty<string>(), Array.Empty<Transicion>());
 Comprobar("Σ vacío detectado", !sinAlfabeto.EsValido && sinAlfabeto.Errores.Any(e => e.Contains("al menos un símbolo")));
 
 ResultadoValidacion duplicados = validador.Validar(
-    new[] { "q0", "q0" }, new[] { '0', '0' }, "q0", new[] { "q0" },
-    new[] { new Transicion("q0", '0', "q0") });
+    new[] { "q0", "q0", "q1", "q2", "q3" }, new[] { '0', '0' }, "q0", new[] { "q0" },
+    transicionesUnSimbolo);
 Comprobar("Estados duplicados detectados", duplicados.Errores.Any(e => e.Contains("Estado duplicado")));
 Comprobar("Símbolos duplicados detectados", duplicados.Errores.Any(e => e.Contains("Símbolo duplicado")));
 
 ResultadoValidacion inicialIncorrecta = validador.Validar(
-    new[] { "q0" }, new[] { '0' }, "qx", Array.Empty<string>(),
-    new[] { new Transicion("q0", '0', "q0") });
+    cincoEstados, new[] { '0' }, "qx", Array.Empty<string>(), transicionesUnSimbolo);
 Comprobar("Estado inicial fuera de Q detectado",
     inicialIncorrecta.Errores.Any(e => e.Contains("inicial") && e.Contains("no pertenece")));
 
 ResultadoValidacion finalIncorrecto = validador.Validar(
-    new[] { "q0" }, new[] { '0' }, "q0", new[] { "qx" },
-    new[] { new Transicion("q0", '0', "q0") });
+    cincoEstados, new[] { '0' }, "q0", new[] { "qx" }, transicionesUnSimbolo);
 Comprobar("Estado final fuera de Q detectado",
     finalIncorrecto.Errores.Any(e => e.Contains("final") && e.Contains("no pertenece")));
 
 ResultadoValidacion incompleta = validador.Validar(
-    new[] { "q0", "q1" }, new[] { '0', '1' }, "q0", new[] { "q0" },
+    cincoEstados, new[] { '0', '1' }, "q0", new[] { "q0" },
     new[] { new Transicion("q0", '0', "q0") });
 Comprobar("Transiciones incompletas detectadas",
-    incompleta.Errores.Count(e => e.Contains("Falta la transición")) == 3);
+    incompleta.Errores.Count(e => e.Contains("Falta la transición")) == 9);
 
 ResultadoValidacion duplicada = validador.Validar(
-    new[] { "q0" }, new[] { '0' }, "q0", new[] { "q0" },
-    new[] { new Transicion("q0", '0', "q0"), new Transicion("q0", '0', "q0") });
+    cincoEstados, new[] { '0' }, "q0", new[] { "q0" },
+    new[] { new Transicion("q0", '0', "q0"), new Transicion("q0", '0', "q0"),
+            new Transicion("q1", '0', "q1"), new Transicion("q2", '0', "q2"),
+            new Transicion("q3", '0', "q3"), new Transicion("q4", '0', "q4") });
 Comprobar("Transición duplicada detectada", duplicada.Errores.Any(e => e.Contains("duplicada")));
 
 ResultadoValidacion destinoInexistente = validador.Validar(
-    new[] { "q0" }, new[] { '0' }, "q0", new[] { "q0" },
-    new[] { new Transicion("q0", '0', "qx") });
+    cincoEstados, new[] { '0' }, "q0", new[] { "q0" },
+    new[] { new Transicion("q0", '0', "qx"), new Transicion("q1", '0', "q1"),
+            new Transicion("q2", '0', "q2"), new Transicion("q3", '0', "q3"),
+            new Transicion("q4", '0', "q4") });
 Comprobar("Destino inexistente detectado",
     destinoInexistente.Errores.Any(e => e.Contains("inexistente")));
 
@@ -399,10 +413,10 @@ try
     Comprobar("Constructor de autómatas construido", constructor.Text.Contains("Módulo 1"));
     constructor.CargarCaso(casos[1]);
     Comprobar("Cargar caso desde el constructor publica el AFD",
-        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadoInicial == "s0" && servicio.Actual.Estados.Count == 3);
+        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadoInicial == "s0" && servicio.Actual.Estados.Count == 5);
     constructor.CargarCaso(casos[3]);
     Comprobar("Un nuevo caso reemplaza al autómata anterior",
-        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadosFinales.SequenceEqual(new[] { "q1" }) == true);
+        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadosFinales.SequenceEqual(new[] { "q1", "q2" }) == true);
     using var busqueda = new BusquedaPalabras();
     Comprobar("Formulario de búsqueda construido", busqueda.Text.Contains("Módulo 2"));
     using var reconocimiento = new ReconocimientoPalabras();

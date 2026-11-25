@@ -13,7 +13,7 @@
 
 ### Descripción general
 
-Aplicación de escritorio para Windows que permite construir un autómata finito determinista a partir de su definición formal, visualizarlo como un diagrama dibujado con GDI+, buscar las cinco palabras aceptadas más cortas y comprobar si una palabra concreta pertenece al lenguaje reconocido. El autómata se define como la terna `M = (Q, Σ, δ)`; el estado inicial `q0` y los estados finales `F` se gestionan como una configuración de aceptación separada. Los tres módulos comparten una única definición: al construir una nueva se reemplaza la anterior.
+Aplicación de escritorio para Windows que permite construir un autómata finito determinista a partir de su definición formal, visualizarlo como un diagrama dibujado con GDI+, buscar las cinco palabras aceptadas más cortas y comprobar si una palabra concreta pertenece al lenguaje reconocido. El autómata se define como la terna `M = (Q, Σ, δ)` con `Q` de exactamente cinco nodos; el estado inicial `q0` y los estados finales `F` se gestionan como una configuración de aceptación separada. Los tres módulos comparten una única definición: al construir una nueva se reemplaza la anterior.
 
 ### Objetivo general
 
@@ -21,9 +21,9 @@ Desarrollar una aplicación completa, funcional y organizada que implemente corr
 
 ### Objetivos específicos
 
-- Definir la terna `M = (Q, Σ, δ)` mediante una interfaz gráfica construida por código.
+- Definir la terna `M = (Q, Σ, δ)` con exactamente cinco nodos mediante una interfaz gráfica construida por código.
 - Configurar por separado el estado inicial `q0` y el conjunto `F` de estados finales.
-- Validar que la definición sea un AFD completo y no ambiguo.
+- Validar que la definición sea un AFD completo, no ambiguo y con cinco estados.
 - Mostrar la representación formal, la tabla de transiciones y el diagrama gráfico.
 - Encontrar hasta cinco palabras aceptadas de longitud máxima 10, ordenadas por longitud y por el orden del alfabeto.
 - Procesar palabras arbitrarias informando del recorrido de estados, del resultado y de los símbolos inválidos.
@@ -31,11 +31,11 @@ Desarrollar una aplicación completa, funcional y organizada que implemente corr
 
 ### Alcance del sistema
 
-- Construcción, modificación y validación de AFD completos.
-- Visualización GDI+ con estados, finales, flecha inicial, arcos y bucles.
+- Construcción, modificación y validación de AFD completos con cinco estados.
+- Visualización GDI+ con los cinco estados, finales, flecha inicial, arcos y bucles.
 - Búsqueda acotada de palabras aceptadas (longitud ≤ 10, máximo 5 resultados).
 - Reconocimiento de palabras sobre el alfabeto definido, incluida la palabra vacía `ε`.
-- Cuatro casos de prueba precargados.
+- Cuatro casos de prueba precargados, todos con cinco estados.
 
 No están incluidos: AFD no deterministas, conversiones entre autómatas, operaciones entre lenguajes en la interfaz, persistencia en disco ni exportación de archivos.
 
@@ -84,9 +84,9 @@ El equipo de desarrollo verificó la compilación con el SDK instalado en el ent
 | --- | --- |
 | `Models/Estado.cs` | Nombre de un estado con igualdad exacta por cadena. |
 | `Models/Transicion.cs` | Tripleta `(origen, símbolo, destino)` que representa `δ`. |
-| `Models/Automata.cs` | Terna inmutable `M = (Q, Σ, δ)`; expone `Estados`, `Alfabeto`, `Transiciones`, `IntentarTransitar` y `RepresentacionFormal(configuracion)`. |
+| `Models/Automata.cs` | Terna inmutable `M = (Q, Σ, δ)` con cinco estados; expone `Estados`, `Alfabeto`, `Transiciones`, `IntentarTransitar` y `RepresentacionFormal(configuracion)`. |
 | `Models/ConfiguracionAceptacion.cs` | Datos de aceptación `q0` y `F`, externos a la terna; ofrece `EsFinal` y `AceptaPalabraVacia`. |
-| `Services/ValidacionAutomataService.cs` | Valida la terna (`ValidarDefinicion`) y la configuración de aceptación (`Validar`); devuelve `ResultadoValidacion`. |
+| `Services/ValidacionAutomataService.cs` | Valida la terna (`ValidarDefinicion`) con exactamente cinco nodos y la configuración de aceptación (`Validar`); devuelve `ResultadoValidacion`. |
 | `Services/AutomataService.cs` | Singleton con `Actual`, `ConfiguracionActual`, `Establecer(...)`, `Limpiar()` y el evento `AutomataCambiado`. |
 | `Services/ReconocimientoService.cs` | Normaliza la entrada, valida símbolos, aplica `δ` desde `q0` y produce `ResultadoReconocimiento`. |
 | `Services/BusquedaPalabrasService.cs` | Calcula la búsqueda ordenada de palabras aceptadas desde `q0` con conteo dinámico. |
@@ -156,7 +156,7 @@ En este proyecto un AFD se define mediante la terna:
 
 donde:
 
-- `Q`: conjunto finito no vacío de estados.
+- `Q`: conjunto finito de exactamente cinco estados (nodos).
 - `Σ`: alfabeto finito de entrada.
 - `δ: Q × Σ → Q`: función de transición total.
 
@@ -178,13 +178,13 @@ Al consumir todos los símbolos de `w` desde `q0`, se obtiene un estado alcanzad
 
 ### Módulo 1. Construcción de autómatas finitos
 
-**Propósito.** Definir y validar la terna `M = (Q, Σ, δ)` y su configuración de aceptación `(q0, F)` para que la utilicen los otros dos módulos.
+**Propósito.** Definir y validar la terna `M = (Q, Σ, δ)` con cinco nodos y su configuración de aceptación `(q0, F)` para que la utilicen los otros dos módulos.
 
-**Entradas.** Estados (separados por comas, punto y coma o espacios), símbolos del alfabeto (cada carácter distinto de separador se trata como un símbolo) y transiciones forman la terna. El estado inicial seleccionable y los estados finales marcados con casillas forman la configuración de aceptación. Las transiciones se pueden agregar con los controles `Origen`, `Símbolo` y `Destino`, editar directamente en las columnas desplegables de la rejilla y quitar con el botón correspondiente. También se pueden agregar o quitar estados y símbolos en cualquier momento.
+**Entradas.** Exactamente cinco estados (separados por comas, punto y coma o espacios), símbolos del alfabeto (cada carácter distinto de separador se trata como un símbolo) y transiciones forman la terna. El estado inicial seleccionable y los estados finales marcados con casillas forman la configuración de aceptación. Las transiciones se pueden agregar con los controles `Origen`, `Símbolo` y `Destino`, editar directamente en las columnas desplegables de la rejilla y quitar con el botón correspondiente. También se pueden agregar o quitar estados y símbolos en cualquier momento, siempre que `Q` quede con cinco nodos.
 
 **Procesamiento.** El botón **VALIDAR Y CONSTRUIR** comprueba que:
 
-- `Q` y `Σ` no estén vacíos.
+- `Q` tenga exactamente cinco estados y `Σ` no esté vacío.
 - No haya estados ni símbolos duplicados.
 - Los orígenes, destinos y símbolos de las transiciones existan.
 - No haya transiciones duplicadas.
@@ -258,7 +258,7 @@ En la ventana *Consola del administrador de paquetes* o en una terminal de Power
 dotnet run --project Pruebas/Pruebas.csproj
 ```
 
-Resultado verificado: **53 comprobaciones, 0 fallos**.
+Resultado verificado: **55 comprobaciones, 0 fallos**.
 
 ### 7. Solución de problemas habituales
 
@@ -275,8 +275,8 @@ Resultado verificado: **53 comprobaciones, 0 fallos**.
 1. **Abrir la aplicación.** Ejecute `dotnet run` o el archivo `.exe` generado. Se muestra el menú principal con el estado del autómata actual.
 2. **Navegar por el menú.** Hay tres botones numerados y un botón *Salir*. Mientras no haya autómata, los módulos 2 y 3 muestran un aviso.
 3. **Acceder al constructor.** Pulse **1 CONSTRUIR AUTÓMATA**.
-4. **Crear un autómata desde cero.** Escriba los nombres de los estados en *Nuevo:* y pulse *Agregar*. Repita para los símbolos en el grupo *Alfabeto Σ*.
-5. **Definir estados y alfabeto.** Las listas muestran lo agregado. Los botones *Quitar* eliminan el elemento seleccionado y sus transiciones relacionadas.
+4. **Crear un autómata desde cero.** Escriba exactamente cinco nombres de estados en *Nuevo:* y pulse *Agregar*. Repita para los símbolos en el grupo *Alfabeto Σ*.
+5. **Definir estados y alfabeto.** Las listas muestran lo agregado. Los botones *Quitar* eliminan el elemento seleccionado y sus transiciones relacionadas; `Q` debe quedar con cinco nodos.
 6. **Establecer inicial y finales.** Elija `q0` en el desplegable *Inicial q0:* y marque las casillas de los estados finales en *Finales F*.
 7. **Registrar transiciones.** Escriba el origen, elija el símbolo y el destino y pulse *Agregar δ*. También puede editar las celdas de la rejilla y quitar la fila seleccionada.
 8. **Validar y construir.** Pulse **VALIDAR Y CONSTRUIR**. Si falta alguna transición o hay duplicados, se muestra el detalle de errores. Si todo es correcto, el autómata queda disponible para los tres módulos. Como alternativa, elija un caso en *Casos de prueba* y pulse *Cargar*.
@@ -330,7 +330,7 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 │   └── Transicion.cs                Transición
 ├── Pruebas/
 │   ├── Pruebas.csproj               Proyecto de consola de verificación
-│   └── Program.cs                   53 comprobaciones automáticas
+│   └── Program.cs                   55 comprobaciones automáticas
 ├── Services/
 │   ├── AutomataService.cs           Instancia compartida
 │   ├── BusquedaPalabrasService.cs   Búsqueda ordenada
@@ -347,42 +347,40 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 
 ## 12.9. Casos de prueba
 
-### Autómata 1 — Cantidad par de ceros
+### Autómata 1 — Cantidad de ceros múltiplo de 5
 
 | Campo | Valor |
 | --- | --- |
-| Q | `{q0, q1}` |
+| Q | `{q0, q1, q2, q3, q4}` |
 | Σ | `{0, 1}` |
 | q0 | `q0` |
 | F | `{q0}` |
-| δ(q0, 0) / δ(q0, 1) | `q1` / `q0` |
-| δ(q1, 0) / δ(q1, 1) | `q0` / `q1` |
+| Transiciones | δ(q0,0)=q1, δ(q1,0)=q2, δ(q2,0)=q3, δ(q3,0)=q4, δ(q4,0)=q0; δ(qi,1)=qi para los cinco estados |
 
 | Palabra | Resultado esperado | Verificado |
 | --- | --- | --- |
-| Cinco más cortas | `ε, 1, 00, 11, 001` | Sí |
-| `0110` | Aceptada | Sí |
-| `1011` | Rechazada | Sí |
+| Cinco más cortas | `ε, 1, 11, 111, 1111` | Sí |
+| `00000` | Aceptada | Sí |
+| `0000` | Rechazada | Sí |
 | `ε` | Aceptada | Sí |
+| `1111` | Aceptada | Sí |
 
-### Autómata 2 — Palabras que terminan en ab
+### Autómata 2 — Palabras que terminan en abab
 
 | Campo | Valor |
 | --- | --- |
-| Q | `{s0, s1, s2}` |
+| Q | `{s0, s1, s2, s3, s4}` |
 | Σ | `{a, b}` |
 | q0 | `s0` |
-| F | `{s2}` |
-| δ(s0, a) / δ(s0, b) | `s1` / `s0` |
-| δ(s1, a) / δ(s1, b) | `s1` / `s2` |
-| δ(s2, a) / δ(s2, b) | `s1` / `s0` |
+| F | `{s4}` |
+| Transiciones | δ(s0,a)=s1, δ(s0,b)=s0, δ(s1,a)=s1, δ(s1,b)=s2, δ(s2,a)=s3, δ(s2,b)=s0, δ(s3,a)=s1, δ(s3,b)=s4, δ(s4,a)=s3, δ(s4,b)=s0 |
 
 | Palabra | Resultado esperado | Verificado |
 | --- | --- | --- |
-| Cinco más cortas | `ab, aab, bab, aaab, abab` | Sí |
+| Cinco más cortas | `abab, aabab, babab, aaabab, ababab` | Sí |
 | `abab` | Aceptada | Sí |
 | `aba` | Rechazada | Sí |
-| `bab` | Aceptada | Sí |
+| `babab` | Aceptada | Sí |
 | `bb` | Rechazada | Sí |
 | `ε` | Rechazada | Sí |
 | `abc` | Símbolo inválido `c`, posición 3 | Sí |
@@ -407,22 +405,23 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 
 | Campo | Valor |
 | --- | --- |
-| Q | `{q0, q1}` |
+| Q | `{q0, q1, q2, q3, q4}` |
 | Σ | `{a}` |
 | q0 | `q0` |
-| F | `{q1}` (inalcanzable) |
-| δ(q0, a) / δ(q1, a) | `q0` / `q1` |
+| F | `{q1, q2}` (inalcanzables) |
+| Transiciones | δ(qi, a) = qi para los cinco estados |
 
 | Prueba | Resultado esperado | Verificado |
 | --- | --- | --- |
 | Búsqueda | Mensaje de «no se encontraron palabras aceptadas» | Sí |
 | `aaa`, `ε` | Rechazadas | Sí |
 
-Además se verificaron las nueve condiciones de validación, el reemplazo de la terna y de su configuración de aceptación en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (53 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
+Además se verificaron las condiciones de validación (incluida la exigencia de exactamente cinco nodos), el reemplazo de la terna y de su configuración de aceptación en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (55 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
 
 ## 12.10. Limitaciones y consideraciones
 
 - Sólo se construyen AFD completos y deterministas; no se admite `δ` parcial ni no determinismo.
+- `Q` debe tener exactamente cinco nodos; la validación rechaza cualquier otra cantidad.
 - Cada símbolo del alfabeto es un carácter individual; los separadores `,`, `;`, `|` y los espacios no forman parte del alfabeto.
 - La búsqueda está limitada a longitud 10 y muestra como máximo cinco palabras, según la especificación.
 - El recorrido de búsqueda se ordena por longitud y por el orden de introducción de los símbolos; no se ofrece otro criterio de orden.

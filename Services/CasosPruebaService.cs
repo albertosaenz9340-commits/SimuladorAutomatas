@@ -61,7 +61,7 @@ public sealed class CasoPrueba
     }
 }
 
-/// <summary>Cuatro autómatas de prueba solicitados en la especificación.</summary>
+/// <summary>Cuatro autómatas de prueba, todos con exactamente cinco estados.</summary>
 public static class CasosPruebaService
 {
     private static Transicion T(string origen, char simbolo, string destino) => new(origen, simbolo, destino);
@@ -71,30 +71,35 @@ public static class CasosPruebaService
         return new[]
         {
             new CasoPrueba(
-                "Cantidad par de ceros",
-                "Acepta las palabras con un número par de símbolos 0.",
-                new[] { "q0", "q1" },
+                "Cantidad de ceros múltiplo de 5",
+                "Acepta las palabras con un número de símbolos 0 múltiplo de 5.",
+                new[] { "q0", "q1", "q2", "q3", "q4" },
                 new[] { '0', '1' },
                 "q0",
                 new[] { "q0" },
                 new[]
                 {
                     T("q0", '0', "q1"), T("q0", '1', "q0"),
-                    T("q1", '0', "q0"), T("q1", '1', "q1")
+                    T("q1", '0', "q2"), T("q1", '1', "q1"),
+                    T("q2", '0', "q3"), T("q2", '1', "q2"),
+                    T("q3", '0', "q4"), T("q3", '1', "q3"),
+                    T("q4", '0', "q0"), T("q4", '1', "q4")
                 }),
 
             new CasoPrueba(
-                "Palabras que terminan en ab",
-                "Acepta exactamente las cadenas sobre {a, b} cuyo sufijo es ab.",
-                new[] { "s0", "s1", "s2" },
+                "Palabras que terminan en abab",
+                "Acepta exactamente las cadenas sobre {a, b} cuyo sufijo es abab.",
+                new[] { "s0", "s1", "s2", "s3", "s4" },
                 new[] { 'a', 'b' },
                 "s0",
-                new[] { "s2" },
+                new[] { "s4" },
                 new[]
                 {
                     T("s0", 'a', "s1"), T("s0", 'b', "s0"),
                     T("s1", 'a', "s1"), T("s1", 'b', "s2"),
-                    T("s2", 'a', "s1"), T("s2", 'b', "s0")
+                    T("s2", 'a', "s3"), T("s2", 'b', "s0"),
+                    T("s3", 'a', "s1"), T("s3", 'b', "s4"),
+                    T("s4", 'a', "s3"), T("s4", 'b', "s0")
                 }),
 
             new CasoPrueba(
@@ -115,15 +120,18 @@ public static class CasosPruebaService
 
             new CasoPrueba(
                 "Lenguaje vacío (final inalcanzable)",
-                "El estado final q1 no es alcanzable desde q0, por lo que L(M) = ∅.",
-                new[] { "q0", "q1" },
+                "Los estados finales q1 y q2 no son alcanzables desde q0, por lo que L(M) = ∅.",
+                new[] { "q0", "q1", "q2", "q3", "q4" },
                 new[] { 'a' },
                 "q0",
-                new[] { "q1" },
+                new[] { "q1", "q2" },
                 new[]
                 {
                     T("q0", 'a', "q0"),
-                    T("q1", 'a', "q1")
+                    T("q1", 'a', "q1"),
+                    T("q2", 'a', "q2"),
+                    T("q3", 'a', "q3"),
+                    T("q4", 'a', "q4")
                 })
         };
     }

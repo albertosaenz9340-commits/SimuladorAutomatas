@@ -93,7 +93,7 @@ public sealed class ConstructorAutomata : Form
         raiz.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         raiz.Controls.Add(Estilos.CrearCabecera(
             "Construcción de autómatas finitos",
-            "Defina la terna M = (Q, Σ, δ) y configure q0 y F por separado. Puede agregar, modificar y eliminar estados y transiciones antes de confirmar."), 0, 0);
+            "Defina la terna M = (Q, Σ, δ) con exactamente 5 nodos y configure q0 y F por separado. Puede agregar, modificar y eliminar estados y transiciones antes de confirmar."), 0, 0);
 
         var division = new SplitContainer
         {
@@ -192,7 +192,7 @@ public sealed class ConstructorAutomata : Form
 
     private GroupBox CrearGrupoEstados()
     {
-        var grupo = Estilos.CrearGrupo("Conjunto Q de estados");
+        var grupo = Estilos.CrearGrupo("Conjunto Q de estados (5 nodos)");
         var rejilla = Estilos.CrearRejilla(2, 3, 3);
         rejilla.ColumnStyles[0] = new ColumnStyle(SizeType.Absolute, 100);
         rejilla.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 100f);
@@ -438,6 +438,12 @@ public sealed class ConstructorAutomata : Form
     {
         foreach (string estado in Dividir(_txtNuevoEstado.Text))
         {
+            if (_estados.Count >= ValidacionAutomataService.CantidadEstadosRequerida)
+            {
+                Mensaje("Q debe tener exactamente 5 nodos. Quite uno antes de agregar otro.");
+                break;
+            }
+
             if (_estados.Any(x => string.Equals(x, estado, StringComparison.Ordinal)))
             {
                 _lblMensaje.Text = $"El estado '{estado}' ya está en Q (no se permiten duplicados).";
@@ -800,7 +806,7 @@ public sealed class ConstructorAutomata : Form
             _dgvTabla.Columns.Clear();
             _dgvTabla.Rows.Clear();
             _txtFormal.Text =
-                "Definición incompleta. La vista previa se mostrará cuando la terna sea válida." +
+                "Definición incompleta. La vista previa se mostrará cuando la terna con 5 nodos sea válida." +
                 Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine, resultado.Errores);
             return;
