@@ -48,13 +48,17 @@ public sealed class ResultadoReconocimiento
 /// </summary>
 public sealed class ReconocimientoService
 {
-    public ResultadoReconocimiento Procesar(Automata automata, string? entrada)
+    public ResultadoReconocimiento Procesar(
+        Automata automata,
+        ConfiguracionAceptacion configuracion,
+        string? entrada)
     {
         ArgumentNullException.ThrowIfNull(automata);
+        ArgumentNullException.ThrowIfNull(configuracion);
 
         string palabra = Normalizar(entrada);
         var simbolos = new List<char>();
-        var recorrido = new List<string> { automata.EstadoInicial };
+        var recorrido = new List<string> { configuracion.EstadoInicial };
 
         for (int i = 0; i < palabra.Length; i++)
         {
@@ -79,10 +83,10 @@ public sealed class ReconocimientoService
         }
 
         string estadoFinal = recorrido[^1];
-        bool aceptada = automata.EsFinal(estadoFinal);
+        bool aceptada = configuracion.EsFinal(estadoFinal);
         string mensajeFinal = palabra.Length == 0
             ? $"Palabra vacía ε: {(aceptada ? "ACEPTADA" : "RECHAZADA")} porque q0 " +
-              $"{(automata.AceptaPalabraVacia ? "pertenece" : "no pertenece")} a F."
+              $"{(configuracion.AceptaPalabraVacia ? "pertenece" : "no pertenece")} a F."
             : $"La palabra '{palabra}' es {(aceptada ? "ACEPTADA" : "RECHAZADA")}: " +
               $"el recorrido termina en {estadoFinal}, " +
               $"{(aceptada ? "que pertenece" : "que no pertenece")} a F.";

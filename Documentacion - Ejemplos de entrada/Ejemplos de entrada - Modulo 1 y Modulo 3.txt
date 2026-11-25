@@ -22,7 +22,8 @@ q1	0	q0
 q1	1	q1
 
 Representación formal
-M = ({q0, q1}, {0, 1}, δ, q0, {q0})
+M = ({q0, q1}, {0, 1}, δ)
+Configuración de aceptación: q0 = q0, F = {q0}
 
 Resultados esperados
 - Acepta: ε, 00, 11, 0000, 010, 1010, 0011, ... (número par de 0)

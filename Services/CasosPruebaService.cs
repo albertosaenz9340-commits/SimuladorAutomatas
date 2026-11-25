@@ -34,10 +34,23 @@ public sealed class CasoPrueba
         Transiciones = transiciones;
     }
 
-    /// <summary>Construye el AFD comprobando antes que su definición sea válida.</summary>
+    /// <summary>Construye la terna M = (Q, Σ, δ) comprobando antes que sea válida.</summary>
     public Automata CrearAutomata()
     {
-        var validacion = new ValidacionAutomataService().Validar(
+        Validar();
+        return new Automata(Nombre, Estados, Alfabeto, Transiciones);
+    }
+
+    /// <summary>Construye la configuración de aceptación (q0, F) del caso.</summary>
+    public ConfiguracionAceptacion CrearConfiguracion() => new(EstadoInicial, EstadosFinales);
+
+    /// <summary>Construye la terna y su configuración de aceptación.</summary>
+    public (Automata Automata, ConfiguracionAceptacion Configuracion) CrearDefinicion() =>
+        (CrearAutomata(), CrearConfiguracion());
+
+    private void Validar()
+    {
+        ResultadoValidacion validacion = new ValidacionAutomataService().Validar(
             Estados, Alfabeto, EstadoInicial, EstadosFinales, Transiciones);
 
         if (!validacion.EsValido)
@@ -45,8 +58,6 @@ public sealed class CasoPrueba
             throw new InvalidOperationException(
                 $"El caso de prueba '{Nombre}' no es válido: {string.Join(" ", validacion.Errores)}");
         }
-
-        return new Automata(Nombre, Estados, Alfabeto, EstadoInicial, EstadosFinales, Transiciones);
     }
 }
 

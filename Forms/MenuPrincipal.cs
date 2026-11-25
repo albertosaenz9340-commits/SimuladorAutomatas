@@ -89,9 +89,10 @@ public sealed class MenuPrincipal : Form
     private void ActualizarEstado()
     {
         Automata? automata = AutomataService.Instancia.Actual;
-        _estadoActual.Text = automata is null
+        ConfiguracionAceptacion? configuracion = AutomataService.Instancia.ConfiguracionActual;
+        _estadoActual.Text = automata is null || configuracion is null
             ? "Estado: no hay un autómata construido. Comience con el módulo 1."
-            : $"Autómata actual: {automata.Nombre}   |   |Q| = {automata.CantidadEstados}, |Σ| = {automata.Alfabeto.Count}, |F| = {automata.EstadosFinales.Count}";
+            : $"Autómata actual: {automata.Nombre}   |   |Q| = {automata.CantidadEstados}, |Σ| = {automata.Alfabeto.Count}, |F| = {configuracion.EstadosFinales.Count}";
     }
 
     private static void Abrir(Form formulario)

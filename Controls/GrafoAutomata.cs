@@ -28,6 +28,7 @@ public sealed class GrafoAutomata : Panel
     private readonly Brush _rellenoInicialFinal = new SolidBrush(Color.FromArgb(222, 240, 246));
 
     private Automata? _automata;
+    private ConfiguracionAceptacion? _configuracion;
     private PointF _desplazamiento = PointF.Empty;
     private float _escala = 1f;
     private bool _arrastrando;
@@ -41,6 +42,17 @@ public sealed class GrafoAutomata : Panel
         set
         {
             _automata = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>Configuración de aceptación usada para marcar inicial y finales.</summary>
+    public ConfiguracionAceptacion? Configuracion
+    {
+        get => _configuracion;
+        set
+        {
+            _configuracion = value;
             Invalidate();
         }
     }
@@ -164,7 +176,7 @@ public sealed class GrafoAutomata : Panel
 
         Dictionary<string, PointF> posiciones = CalcularPosiciones(_automata);
         DibujarTransiciones(g, _automata, posiciones);
-        DibujarEstados(g, _automata, posiciones);
+        DibujarEstados(g, _automata, posiciones, Configuracion);
     }
 
     private static Dictionary<string, PointF> CalcularPosiciones(Automata automata)
@@ -271,13 +283,18 @@ public sealed class GrafoAutomata : Panel
         DibujarEtiqueta(g, etiqueta, new PointF(centro.X, centro.Y - RadioEstado - SeparacionBucle - 12f));
     }
 
-    private void DibujarEstados(Graphics g, Automata automata, Dictionary<string, PointF> posiciones)
+    private void DibujarEstados(
+        Graphics g,
+        Automata automata,
+        Dictionary<string, PointF> posiciones,
+        ConfiguracionAceptacion? configuracion)
     {
         foreach (string estado in automata.Estados)
         {
             PointF centro = posiciones[estado];
-            bool esInicial = string.Equals(estado, automata.EstadoInicial, StringComparison.Ordinal);
-            bool esFinal = automata.EsFinal(estado);
+            bool esInicial = configuracion is not null &&
+                             string.Equals(estado, configuracion.EstadoInicial, StringComparison.Ordinal);
+            bool esFinal = configuracion?.EsFinal(estado) ?? false;
 
             if (esInicial)
             {

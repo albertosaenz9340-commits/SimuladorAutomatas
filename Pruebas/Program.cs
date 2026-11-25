@@ -264,11 +264,15 @@ var buscador = new BusquedaPalabrasService();
 var reconocedor = new ReconocimientoService();
 var validador = new ValidacionAutomataService();
 IReadOnlyList<CasoPrueba> casos = CasosPruebaService.ObtenerCasos();
+ConfiguracionAceptacion c1 = casos[0].CrearConfiguracion();
+ConfiguracionAceptacion c2 = casos[1].CrearConfiguracion();
+ConfiguracionAceptacion c3 = casos[2].CrearConfiguracion();
+ConfiguracionAceptacion c4 = casos[3].CrearConfiguracion();
 
 Console.WriteLine("=== MÓDULO 2: búsqueda de palabras ===");
 
 Automata a1 = casos[0].CrearAutomata();
-ResultadoBusqueda r1 = buscador.Buscar(a1);
+ResultadoBusqueda r1 = buscador.Buscar(a1, c1);
 ComprobarSecuencia("Autómata 1 — cinco palabras más cortas",
     r1.Palabras.Select(p => p.Palabra), new[] { "", "1", "00", "11", "001" });
 ComprobarSecuencia("Autómata 1 — longitudes",
@@ -277,53 +281,53 @@ ComprobarSecuencia("Autómata 1 — recorrido de 001",
     r1.Palabras.Last().Recorrido, new[] { "q0", "q1", "q0", "q0" });
 
 Automata a2 = casos[1].CrearAutomata();
-ResultadoBusqueda r2 = buscador.Buscar(a2);
+ResultadoBusqueda r2 = buscador.Buscar(a2, c2);
 ComprobarSecuencia("Autómata 2 — cinco palabras más cortas",
     r2.Palabras.Select(p => p.Palabra), new[] { "ab", "aab", "bab", "aaab", "abab" });
 ComprobarSecuencia("Autómata 2 — recorrido de ab",
     r2.Palabras.First().Recorrido, new[] { "s0", "s1", "s2" });
 
 Automata a3 = casos[2].CrearAutomata();
-ResultadoBusqueda r3 = buscador.Buscar(a3);
+ResultadoBusqueda r3 = buscador.Buscar(a3, c3);
 ComprobarSecuencia("Autómata 3 — sólo ab y ba",
     r3.Palabras.Select(p => p.Palabra), new[] { "ab", "ba" });
 Comprobar("Autómata 3 — no acepta 'aabb'",
-    !reconocedor.Procesar(a3, "aabb").Aceptada);
+    !reconocedor.Procesar(a3, c3, "aabb").Aceptada);
 Comprobar("Autómata 3 — no acepta ε",
-    !reconocedor.Procesar(a3, "ε").Aceptada);
+    !reconocedor.Procesar(a3, c3, "ε").Aceptada);
 
 Automata a4 = casos[3].CrearAutomata();
-ResultadoBusqueda r4 = buscador.Buscar(a4);
+ResultadoBusqueda r4 = buscador.Buscar(a4, c4);
 Comprobar("Autómata 4 — sin palabras aceptadas", r4.Palabras.Count == 0,
     $"se obtuvieron {r4.Palabras.Count} palabras");
 
 Console.WriteLine("=== MÓDULO 3: reconocimiento ===");
 
-void Reconocimiento(Automata automata, string palabra, bool esperado, string nombre)
+void Reconocimiento(Automata automata, ConfiguracionAceptacion configuracion, string palabra, bool esperado, string nombre)
 {
-    ResultadoReconocimiento resultado = reconocedor.Procesar(automata, palabra);
+    ResultadoReconocimiento resultado = reconocedor.Procesar(automata, configuracion, palabra);
     Comprobar($"{nombre}: {Visible(palabra)} → {(esperado ? "ACEPTADA" : "RECHAZADA")}",
         resultado.EntradaValida && resultado.Aceptada == esperado,
         $"entrada válida={resultado.EntradaValida}, aceptada={resultado.Aceptada}");
 }
 
-Reconocimiento(a1, "0110", true, "Autómata 1");
-Reconocimiento(a1, "1011", false, "Autómata 1");
-Reconocimiento(a1, "ε", true, "Autómata 1");
-Reconocimiento(a2, "abab", true, "Autómata 2");
-Reconocimiento(a2, "aba", false, "Autómata 2");
-Reconocimiento(a2, "bab", true, "Autómata 2");
-Reconocimiento(a2, "bb", false, "Autómata 2");
-Reconocimiento(a2, "", false, "Autómata 2");
-Reconocimiento(a4, "aaa", false, "Autómata 4");
+Reconocimiento(a1, c1, "0110", true, "Autómata 1");
+Reconocimiento(a1, c1, "1011", false, "Autómata 1");
+Reconocimiento(a1, c1, "ε", true, "Autómata 1");
+Reconocimiento(a2, c2, "abab", true, "Autómata 2");
+Reconocimiento(a2, c2, "aba", false, "Autómata 2");
+Reconocimiento(a2, c2, "bab", true, "Autómata 2");
+Reconocimiento(a2, c2, "bb", false, "Autómata 2");
+Reconocimiento(a2, c2, "", false, "Autómata 2");
+Reconocimiento(a4, c4, "aaa", false, "Autómata 4");
 
-ResultadoReconocimiento invalida = reconocedor.Procesar(a2, "abc");
+ResultadoReconocimiento invalida = reconocedor.Procesar(a2, c2, "abc");
 Comprobar("Símbolo inválido 'c' en posición 3",
     !invalida.EntradaValida && invalida.SimboloInvalido == 'c' && invalida.PosicionInvalida == 3,
     $"símbolo={invalida.SimboloInvalido}, posición={invalida.PosicionInvalida}");
 
 ComprobarSecuencia("Recorrido de 0110 en el autómata 1",
-    reconocedor.Procesar(a1, "0110").RecorridoEstados,
+    reconocedor.Procesar(a1, c1, "0110").RecorridoEstados,
     new[] { "q0", "q1", "q1", "q1", "q0" });
 
 Console.WriteLine("=== VALIDACIONES ===");
@@ -372,19 +376,21 @@ Comprobar("Destino inexistente detectado",
 Console.WriteLine("=== SERVICIO COMPARTIDO ===");
 
 AutomataService servicio = AutomataService.Instancia;
-servicio.Establecer(a1);
-Comprobar("El servicio conserva el autómata actual", ReferenceEquals(servicio.Actual, a1));
-servicio.Establecer(a2);
-Comprobar("Un nuevo autómata reemplaza al anterior", ReferenceEquals(servicio.Actual, a2));
-servicio.Establecer(a3);
-Comprobar("Los tres módulos comparten la misma instancia",
-    ReferenceEquals(servicio.Actual, a3) && buscador.Buscar(servicio.Actual!).Palabras.Count == 2);
+servicio.Establecer(a1, c1);
+Comprobar("El servicio conserva la terna actual", ReferenceEquals(servicio.Actual, a1));
+Comprobar("El servicio conserva la configuración de aceptación", ReferenceEquals(servicio.ConfiguracionActual, c1));
+servicio.Establecer(a2, c2);
+Comprobar("Una nueva terna reemplaza a la anterior", ReferenceEquals(servicio.Actual, a2));
+servicio.Establecer(a3, c3);
+Comprobar("Los tres módulos comparten la misma definición",
+    ReferenceEquals(servicio.Actual, a3) &&
+    buscador.Buscar(servicio.Actual!, servicio.ConfiguracionActual!).Palabras.Count == 2);
 servicio.Limpiar();
-Comprobar("Limpiar deja el servicio sin autómata", !servicio.HayAutomata);
+Comprobar("Limpiar deja el servicio sin autómata", !servicio.HayAutomata && servicio.ConfiguracionActual is null);
 
 Console.WriteLine("=== INTERFAZ (pruebas de humo) ===");
 
-servicio.Establecer(a1);
+servicio.Establecer(a1, c1);
 try
 {
     using var menu = new MenuPrincipal();
@@ -393,22 +399,22 @@ try
     Comprobar("Constructor de autómatas construido", constructor.Text.Contains("Módulo 1"));
     constructor.CargarCaso(casos[1]);
     Comprobar("Cargar caso desde el constructor publica el AFD",
-        servicio.Actual is not null && servicio.Actual.EstadoInicial == "s0" && servicio.Actual.Estados.Count == 3);
+        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadoInicial == "s0" && servicio.Actual.Estados.Count == 3);
     constructor.CargarCaso(casos[3]);
     Comprobar("Un nuevo caso reemplaza al autómata anterior",
-        servicio.Actual is not null && servicio.Actual.EstadosFinales.SequenceEqual(new[] { "q1" }));
+        servicio.Actual is not null && servicio.ConfiguracionActual?.EstadosFinales.SequenceEqual(new[] { "q1" }) == true);
     using var busqueda = new BusquedaPalabras();
     Comprobar("Formulario de búsqueda construido", busqueda.Text.Contains("Módulo 2"));
     using var reconocimiento = new ReconocimientoPalabras();
     Comprobar("Formulario de reconocimiento construido", reconocimiento.Text.Contains("Módulo 3"));
 
     using var mapa = new Bitmap(500, 360);
-    using var grafo = new GrafoAutomata { Automata = a2, Size = new Size(500, 360) };
+    using var grafo = new GrafoAutomata { Automata = a2, Configuracion = c2, Size = new Size(500, 360) };
     grafo.DrawToBitmap(mapa, new Rectangle(0, 0, 500, 360));
     Comprobar("Diagrama GDI+ dibujado sin excepciones", mapa.Width == 500 && mapa.Height == 360);
 
     Console.WriteLine("=== AUDITORÍA DE TEXTOS ===");
-    servicio.Establecer(a1);
+    servicio.Establecer(a1, c1);
     VerificarPlaceholderDiagrama();
     VerificarCajaEntradaReconocimiento();
     VerificarTextos(() => new MenuPrincipal(), "Menú principal");
@@ -417,7 +423,7 @@ try
     VerificarTextos(() => new ReconocimientoPalabras(), "Reconocimiento de palabras");
 
     Console.WriteLine("=== REDIMENSIONADO REAL DE INTERFAZ ===");
-    servicio.Establecer(a1);
+    servicio.Establecer(a1, c1);
     ProbarRedimensionado(menu, "Menú principal");
     ProbarRedimensionado(constructor, "Constructor de autómatas");
     ProbarRedimensionado(busqueda, "Búsqueda de palabras");

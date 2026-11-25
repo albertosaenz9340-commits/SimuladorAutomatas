@@ -17,10 +17,13 @@ public sealed class AutomataService
 
     public static AutomataService Instancia => InstanciaUnique.Value;
 
-    /// <summary>Autómata actualmente construido, o null si todavía no existe.</summary>
+    /// <summary>Terna M = (Q, Σ, δ) construida, o null si todavía no existe.</summary>
     public Automata? Actual { get; private set; }
 
-    public bool HayAutomata => Actual is not null;
+    /// <summary>Configuración de aceptación (q0, F), externa a la terna.</summary>
+    public ConfiguracionAceptacion? ConfiguracionActual { get; private set; }
+
+    public bool HayAutomata => Actual is not null && ConfiguracionActual is not null;
 
     public event EventHandler? AutomataCambiado;
 
@@ -48,28 +51,38 @@ public sealed class AutomataService
             return resultado;
         }
 
-        Actual = new Automata(nombre, estados, alfabeto, estadoInicial, estadosFinales, transiciones);
+        Actual = new Automata(nombre, estados, alfabeto, transiciones);
+        ConfiguracionActual = new ConfiguracionAceptacion(estadoInicial, estadosFinales);
         AutomataCambiado?.Invoke(this, EventArgs.Empty);
         return resultado;
     }
 
-    /// <summary>Fuerza una instancia ya validada (usada por los casos de prueba).</summary>
-    public void Establecer(Automata automata)
+    /// <summary>Fuerza una definición ya validada (usada por los casos de prueba).</summary>
+    public void Establecer(Automata automata, ConfiguracionAceptacion configuracion)
     {
         Actual = automata ?? throw new ArgumentNullException(nameof(automata));
+        ConfiguracionActual = configuracion ?? throw new ArgumentNullException(nameof(configuracion));
         AutomataCambiado?.Invoke(this, EventArgs.Empty);
     }
 
     public void Limpiar()
     {
         Actual = null;
+        ConfiguracionActual = null;
         AutomataCambiado?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Obtiene el AFD actual o lanza una excepción clara si no existe.</summary>
+    /// <summary>Obtiene la terna actual o lanza una excepción clara si no existe.</summary>
     public Automata ObtenerActualOExcepcion()
     {
         return Actual ?? throw new InvalidOperationException(
             "Todavía no se ha construido ningún autómata. Use el Módulo 1 para crearlo.");
+    }
+
+    /// <summary>Obtiene la configuración de aceptación actual o lanza una excepción clara.</summary>
+    public ConfiguracionAceptacion ObtenerConfiguracionOExcepcion()
+    {
+        return ConfiguracionActual ?? throw new InvalidOperationException(
+            "Todavía no se ha definido el estado inicial ni los estados finales. Use el Módulo 1.");
     }
 }

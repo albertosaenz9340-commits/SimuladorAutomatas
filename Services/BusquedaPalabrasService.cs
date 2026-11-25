@@ -47,13 +47,14 @@ public sealed class BusquedaPalabrasService
     public const int LongitudMaxima = 10;
     public const int LimitePalabras = 5;
 
-    public ResultadoBusqueda Buscar(Automata automata)
+    public ResultadoBusqueda Buscar(Automata automata, ConfiguracionAceptacion configuracion)
     {
         ArgumentNullException.ThrowIfNull(automata);
+        ArgumentNullException.ThrowIfNull(configuracion);
 
         char[] simbolos = automata.Alfabeto.ToArray();
         int cantidadEstados = automata.Estados.Count;
-        int indiceInicial = automata.ObtenerIndice(automata.EstadoInicial);
+        int indiceInicial = automata.ObtenerIndice(configuracion.EstadoInicial);
 
         var siguiente = new int[cantidadEstados, simbolos.Length];
         for (int i = 0; i < cantidadEstados; i++)
@@ -71,7 +72,7 @@ public sealed class BusquedaPalabrasService
         var conteo = new int[cantidadEstados, LongitudMaxima + 1];
         for (int i = 0; i < cantidadEstados; i++)
         {
-            conteo[i, 0] = automata.EsFinal(automata.Estados[i]) ? 1 : 0;
+            conteo[i, 0] = configuracion.EsFinal(automata.Estados[i]) ? 1 : 0;
         }
 
         for (int longitud = 1; longitud <= LongitudMaxima; longitud++)
@@ -106,7 +107,7 @@ public sealed class BusquedaPalabrasService
 
             construccion.Clear();
             recorrido.Clear();
-            recorrido.Add(automata.EstadoInicial);
+            recorrido.Add(configuracion.EstadoInicial);
 
             Generar(automata, simbolos, siguiente, conteo, indiceInicial, longitud,
                     construccion, recorrido, palabras);

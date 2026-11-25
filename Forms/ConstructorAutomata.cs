@@ -12,9 +12,9 @@ using SimuladorAutomatas.UI;
 namespace SimuladorAutomatas.Forms;
 
 /// <summary>
-/// Módulo 1: permite definir estados, alfabeto, estado inicial, estados finales
-/// y transiciones; valida el AFD, publica la instancia compartida y muestra su
-/// representación formal, su tabla de transiciones y su diagrama GDI+.
+/// Módulo 1: permite definir la terna M = (Q, Σ, δ) y, por separado, el estado
+/// inicial y los estados finales; valida el AFD, publica la instancia compartida
+/// y muestra su representación formal, su tabla de transiciones y su diagrama GDI+.
 /// </summary>
 public sealed class ConstructorAutomata : Form
 {
@@ -71,10 +71,11 @@ public sealed class ConstructorAutomata : Form
         ActualizarVistaPrevia();
 
         Automata? existente = AutomataService.Instancia.Actual;
-        if (existente is not null)
+        ConfiguracionAceptacion? configuracionExistente = AutomataService.Instancia.ConfiguracionActual;
+        if (existente is not null && configuracionExistente is not null)
         {
             _lblMensaje.Text = $"Hay un autómata construido previamente: {existente.Nombre}.";
-            MostrarAutomata(existente);
+            MostrarAutomata(existente, configuracionExistente);
         }
     }
 
@@ -92,7 +93,7 @@ public sealed class ConstructorAutomata : Form
         raiz.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         raiz.Controls.Add(Estilos.CrearCabecera(
             "Construcción de autómatas finitos",
-            "Defina la quíntupla M = (Q, Σ, δ, q0, F). Puede agregar, modificar y eliminar estados y transiciones antes de confirmar."), 0, 0);
+            "Defina la terna M = (Q, Σ, δ) y configure q0 y F por separado. Puede agregar, modificar y eliminar estados y transiciones antes de confirmar."), 0, 0);
 
         var division = new SplitContainer
         {
@@ -571,7 +572,7 @@ public sealed class ConstructorAutomata : Form
         }
 
         Automata construido = AutomataService.Instancia.Actual!;
-        MostrarAutomata(construido);
+        MostrarAutomata(construido, AutomataService.Instancia.ConfiguracionActual!);
         Mensaje($"Autómata construido: {construido.Nombre}. Ya puede usar los módulos 2 y 3.");
         MessageBox.Show(
             "El autómata se construyó correctamente y está disponible en los tres módulos.",
@@ -621,9 +622,9 @@ public sealed class ConstructorAutomata : Form
 
         ActualizarListas(conservarSeleccion: false);
 
-        Automata automata = caso.CrearAutomata();
-        AutomataService.Instancia.Establecer(automata);
-        MostrarAutomata(automata);
+        (Automata automata, ConfiguracionAceptacion configuracion) = caso.CrearDefinicion();
+        AutomataService.Instancia.Establecer(automata, configuracion);
+        MostrarAutomata(automata, configuracion);
         Mensaje($"Caso cargado: {caso.Nombre}. {caso.Descripcion}");
     }
 
@@ -799,24 +800,26 @@ public sealed class ConstructorAutomata : Form
             _dgvTabla.Columns.Clear();
             _dgvTabla.Rows.Clear();
             _txtFormal.Text =
-                "Definición incompleta. La vista previa se mostrará cuando la quíntupla sea válida." +
+                "Definición incompleta. La vista previa se mostrará cuando la terna sea válida." +
                 Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine, resultado.Errores);
             return;
         }
 
-        var vistaPrevia = new Automata("Vista previa", _estados, _alfabeto, inicial, FinalesSeleccionados(), _transiciones);
-        MostrarAutomata(vistaPrevia);
+        var vistaPrevia = new Automata("Vista previa", _estados, _alfabeto, _transiciones);
+        var configuracionPrevia = new ConfiguracionAceptacion(inicial, FinalesSeleccionados());
+        MostrarAutomata(vistaPrevia, configuracionPrevia);
     }
 
-    private void MostrarAutomata(Automata automata)
+    private void MostrarAutomata(Automata automata, ConfiguracionAceptacion configuracion)
     {
-        _txtFormal.Text = automata.RepresentacionFormal;
-        MostrarTabla(automata);
+        _txtFormal.Text = automata.RepresentacionFormal(configuracion);
+        MostrarTabla(automata, configuracion);
         _grafo.Automata = automata;
+        _grafo.Configuracion = configuracion;
     }
 
-    private void MostrarTabla(Automata automata)
+    private void MostrarTabla(Automata automata, ConfiguracionAceptacion configuracion)
     {
         _dgvTabla.Columns.Clear();
         _dgvTabla.Rows.Clear();
@@ -842,8 +845,8 @@ public sealed class ConstructorAutomata : Form
 
         foreach (string estado in automata.Estados)
         {
-            bool esInicial = estado == automata.EstadoInicial;
-            bool esFinal = automata.EsFinal(estado);
+            bool esInicial = estado == configuracion.EstadoInicial;
+            bool esFinal = configuracion.EsFinal(estado);
             string marcador = (esInicial ? "→" : string.Empty) + (esFinal ? "*" : string.Empty);
             var valores = new List<object> { $"{marcador}{estado}" };
             valores.AddRange(automata.Alfabeto.Select(s => (object)automata.ObtenerDestino(estado, s)!));
