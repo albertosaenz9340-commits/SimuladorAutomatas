@@ -520,6 +520,274 @@ void VerificarEstiloGrafico()
     mapa.Dispose();
 }
 
+// Comprueba las correcciones geométricas de los defectos A-F: curvas locales,
+// zona exclusiva de Inicio, etiquetas ancladas, bucles compactos, puntas
+// tangentes en el perímetro y aprovechamiento del lienzo sin recortes.
+void VerificarCorreccionesGeometricas()
+{
+    static PointF Bezier(GrafoAutomata.CurvaInfo c, float t)
+    {
+        float u = 1f - t;
+        return new PointF(
+            u * u * u * c.Inicio.X + 3f * u * u * t * c.Control1.X +
+            3f * u * t * t * c.Control2.X + t * t * t * c.Fin.X,
+            u * u * u * c.Inicio.Y + 3f * u * u * t * c.Control1.Y +
+            3f * u * t * t * c.Control2.Y + t * t * t * c.Fin.Y);
+    }
+
+    static PointF BezierBucle(GrafoAutomata.BucleInfo b, float t)
+    {
+        float u = 1f - t;
+        return new PointF(
+            u * u * u * b.Inicio.X + 3f * u * u * t * b.Control1.X +
+            3f * u * t * t * b.Control2.X + t * t * t * b.Fin.X,
+            u * u * u * b.Inicio.Y + 3f * u * u * t * b.Control1.Y +
+            3f * u * t * t * b.Control2.Y + t * t * t * b.Fin.Y);
+    }
+
+    static float Dist(PointF a, PointF b)
+    {
+        float dx = a.X - b.X;
+        float dy = a.Y - b.Y;
+        return (float)Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    static float DistanciaALinea(PointF p, PointF a, PointF b)
+    {
+        float dx = b.X - a.X;
+        float dy = b.Y - a.Y;
+        float largo = (float)Math.Sqrt(dx * dx + dy * dy);
+        return largo < 1f ? Dist(p, a) : Math.Abs(dy * p.X - dx * p.Y + b.X * a.Y - b.Y * a.X) / largo;
+    }
+
+    static IEnumerable<PointF> Muestra(GrafoAutomata.CurvaInfo c)
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            yield return Bezier(c, i / 20f);
+        }
+    }
+
+    static IEnumerable<PointF> MuestraBucle(GrafoAutomata.BucleInfo b)
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            yield return BezierBucle(b, i / 20f);
+        }
+    }
+
+    Transicion T(string origen, char simbolo, string destino) => new(origen, simbolo, destino);
+    Automata caso = CasosPruebaService.ObtenerCasos()[0].CrearAutomata();
+    var geometria = GrafoAutomata.ObtenerGeometria(caso, new Size(900, 620));
+
+    // A. Curvas compactas: puntos de control cerca de la cuerda y trayectoria
+    // dentro de la caja de sus extremos, sin envolver otros estados.
+    bool compactas = true;
+    float maxDesvioControl = 0f;
+    foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+    {
+        maxDesvioControl = Math.Max(maxDesvioControl,
+            DistanciaALinea(curva.Control1, curva.Inicio, curva.Fin));
+        maxDesvioControl = Math.Max(maxDesvioControl,
+            DistanciaALinea(curva.Control2, curva.Inicio, curva.Fin));
+
+        float minX = Math.Min(curva.Inicio.X, curva.Fin.X) - 40f;
+        float maxX = Math.Max(curva.Inicio.X, curva.Fin.X) + 40f;
+        float minY = Math.Min(curva.Inicio.Y, curva.Fin.Y) - 40f;
+        float maxY = Math.Max(curva.Inicio.Y, curva.Fin.Y) + 40f;
+        foreach (PointF punto in Muestra(curva))
+        {
+            compactas &= punto.X >= minX && punto.X <= maxX &&
+                         punto.Y >= minY && punto.Y <= maxY;
+            foreach ((string estado, PointF centro) in geometria.Posiciones)
+            {
+                if (estado != curva.Origen && estado != curva.Destino)
+                {
+                    compactas &= Dist(punto, centro) >= GrafoAutomata.RadioEstado - 3f;
+                }
+            }
+        }
+    }
+    Comprobar("A. Curvas Bézier compactas y locales",
+        compactas && maxDesvioControl <= 34f,
+        $"desvío máximo={maxDesvioControl:0.0}");
+
+    // B. Zona exclusiva a la derecha de q0: ninguna curva ni bucle la invade.
+    RectangleF zona = RectangleF.Inflate(geometria.ZonaInicial, 1f, 1f);
+    bool zonaLibre = true;
+    foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+    {
+        foreach (PointF punto in Muestra(curva))
+        {
+            zonaLibre &= !zona.Contains(punto);
+        }
+    }
+    foreach (GrafoAutomata.BucleInfo bucle in geometria.Bucles)
+    {
+        foreach (PointF punto in MuestraBucle(bucle))
+        {
+            zonaLibre &= !zona.Contains(punto);
+        }
+    }
+    GrafoAutomata.BucleInfo bucleQ0 = geometria.Bucles.First(b => b.Estado == caso.EstadoInicial);
+    foreach (PointF punto in MuestraBucle(bucleQ0))
+    {
+        zonaLibre &= !zona.Contains(punto);
+    }
+    Comprobar("B. Inicio separado de bucles y transiciones", zonaLibre,
+        $"zona=({zona.X:0},{zona.Y:0},{zona.Width:0},{zona.Height:0})");
+
+    // C. Etiquetas ancladas al punto medio de su curva, con separación pequeña.
+    bool ancladas = true;
+    float maximaDistancia = 0f;
+    foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+    {
+        if (curva.EtiquetaRectangulo == RectangleF.Empty)
+        {
+            ancladas = false;
+            continue;
+        }
+
+        PointF medio = Bezier(curva, 0.5f);
+        PointF centroEtiqueta = new(
+            curva.EtiquetaRectangulo.X + curva.EtiquetaRectangulo.Width / 2f,
+            curva.EtiquetaRectangulo.Y + curva.EtiquetaRectangulo.Height / 2f);
+        float distancia = Dist(medio, centroEtiqueta);
+        maximaDistancia = Math.Max(maximaDistancia, distancia);
+        ancladas &= distancia >= 3f && distancia <= 40f &&
+                    curva.EtiquetaRectangulo.Height <= 20f;
+    }
+    foreach (GrafoAutomata.BucleInfo bucle in geometria.Bucles)
+    {
+        if (bucle.EtiquetaRectangulo == RectangleF.Empty)
+        {
+            ancladas = false;
+            continue;
+        }
+
+        PointF medio = BezierBucle(bucle, 0.5f);
+        PointF centroEtiqueta = new(
+            bucle.EtiquetaRectangulo.X + bucle.EtiquetaRectangulo.Width / 2f,
+            bucle.EtiquetaRectangulo.Y + bucle.EtiquetaRectangulo.Height / 2f);
+        float distancia = Dist(medio, centroEtiqueta);
+        maximaDistancia = Math.Max(maximaDistancia, distancia);
+        ancladas &= distancia >= 3f && distancia <= 40f;
+    }
+    Comprobar("C. Etiquetas ancladas al punto medio de la Bézier",
+        ancladas, $"distancia máxima={maximaDistancia:0.0}");
+
+    // D. Bucles compactos: entrada/salida sobre el perímetro y radio controlado.
+    bool buclesCompactos = true;
+    float maxRadio = 0f;
+    foreach (GrafoAutomata.BucleInfo bucle in geometria.Bucles)
+    {
+        PointF centro = geometria.Posiciones[bucle.Estado];
+        float radioInicio = Dist(bucle.Inicio, centro);
+        float radioFin = Dist(bucle.Fin, centro);
+        buclesCompactos &= Math.Abs(radioInicio - GrafoAutomata.RadioEstado) < 0.6f &&
+                           Math.Abs(radioFin - GrafoAutomata.RadioEstado) < 0.6f;
+        foreach (PointF punto in MuestraBucle(bucle))
+        {
+            float radio = Dist(punto, centro);
+            maxRadio = Math.Max(maxRadio, radio);
+            buclesCompactos &= radio >= GrafoAutomata.RadioEstado - 2f && radio <= 52f;
+        }
+    }
+    Comprobar("D. Bucles compactos con extremos en el perímetro",
+        buclesCompactos, $"radio máximo={maxRadio:0.0}");
+
+    // E. Puntas de flecha: extremo en el perímetro destino y tangente entrante.
+    bool puntasCorrectas = true;
+    foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+    {
+        PointF destino = geometria.Posiciones[curva.Destino];
+        float radioFin = Dist(curva.Fin, destino);
+        PointF direccion = new(curva.Fin.X - curva.Control2.X, curva.Fin.Y - curva.Control2.Y);
+        PointF haciaCentro = new(destino.X - curva.Fin.X, destino.Y - curva.Fin.Y);
+        float longitudDireccion = Dist(direccion, PointF.Empty);
+        float longitudCentro = Dist(haciaCentro, PointF.Empty);
+        float coseno = longitudDireccion > 0f && longitudCentro > 0f
+            ? (direccion.X * haciaCentro.X + direccion.Y * haciaCentro.Y) /
+              (longitudDireccion * longitudCentro)
+            : -1f;
+        puntasCorrectas &= Math.Abs(radioFin - (GrafoAutomata.RadioEstado + 1f)) < 0.6f &&
+                           coseno > 0.55f;
+    }
+    foreach (GrafoAutomata.BucleInfo bucle in geometria.Bucles)
+    {
+        PointF centro = geometria.Posiciones[bucle.Estado];
+        float radioFin = Dist(bucle.Fin, centro);
+        PointF direccion = new(bucle.Fin.X - bucle.Control2.X, bucle.Fin.Y - bucle.Control2.Y);
+        PointF haciaCentro = new(centro.X - bucle.Fin.X, centro.Y - bucle.Fin.Y);
+        float longitudDireccion = Dist(direccion, PointF.Empty);
+        float longitudCentro = Dist(haciaCentro, PointF.Empty);
+        float coseno = longitudDireccion > 0f && longitudCentro > 0f
+            ? (direccion.X * haciaCentro.X + direccion.Y * haciaCentro.Y) /
+              (longitudDireccion * longitudCentro)
+            : -1f;
+        puntasCorrectas &= Math.Abs(radioFin - GrafoAutomata.RadioEstado) < 0.6f &&
+                           coseno > 0.55f;
+    }
+    Comprobar("E. Puntas tangentes en el perímetro destino", puntasCorrectas);
+
+    // F. Ningún trazo se recorta en el borde del lienzo.
+    using (var mapa = new Bitmap(900, 620))
+    using (var lienzo = new GrafoAutomata
+           {
+               Automata = caso,
+               Dock = DockStyle.None,
+               Size = new Size(900, 620)
+           })
+    {
+        lienzo.DrawToBitmap(mapa, new Rectangle(0, 0, 900, 620));
+        int borde = 0;
+        for (int y = 0; y < 620; y++)
+        {
+            for (int x = 0; x < 900; x++)
+            {
+                bool perimetro = x < 6 || x > 893 || y < 6 || y > 613;
+                if (!perimetro)
+                {
+                    continue;
+                }
+
+                Color c = mapa.GetPixel(x, y);
+                if (c.R < 170 && c.G < 170 && c.B < 170)
+                {
+                    borde++;
+                }
+            }
+        }
+        Comprobar("F. Diagrama sin recortes en los bordes", borde == 0,
+            $"píxeles oscuros en el borde={borde}");
+    }
+
+    // Sentidos opuestos separados sin arcos desproporcionados.
+    var bidireccional = new Automata("Bidireccional", new[] { "a", "b" },
+        new[] { '0', '1' }, "a", new[] { "b" },
+        new[] { T("a", '0', "b"), T("b", '0', "a") });
+    var geoBi = GrafoAutomata.ObtenerGeometria(bidireccional, new Size(900, 620));
+    var ida = geoBi.Curvas.First(c => c.Origen == "a");
+    var vuelta = geoBi.Curvas.First(c => c.Origen == "b");
+    float separacion = Dist(Bezier(ida, 0.5f), Bezier(vuelta, 0.5f));
+    Comprobar("Sentidos opuestos separados con curvatura moderada",
+        geoBi.Curvas.Count == 2 && separacion >= 12f && separacion <= 70f,
+        $"separación={separacion:0.0}");
+
+    // La geometría sigue siendo compacta tras redimensionar y hacer zoom.
+    bool adaptable = true;
+    foreach (Size tamaño in new[] { new Size(600, 420), new Size(1100, 760) })
+    {
+        var geo = GrafoAutomata.ObtenerGeometria(caso, tamaño, 2f);
+        foreach (GrafoAutomata.CurvaInfo curva in geo.Curvas)
+        {
+            adaptable &= DistanciaALinea(curva.Control1, curva.Inicio, curva.Fin) <= 34f &&
+                         DistanciaALinea(curva.Control2, curva.Inicio, curva.Fin) <= 34f;
+        }
+    }
+    Comprobar("Geometría compacta al redimensionar y ampliar", adaptable);
+}
+
 // Comprueba que el texto escrito en el cuadro de entrada del Módulo 3 se ve
 // completo (el problema era una fila fija que recortaba la parte inferior).
 void VerificarCajaEntradaReconocimiento()
@@ -749,6 +1017,9 @@ try
 
     Console.WriteLine("=== IDENTIDAD VISUAL DEL DIAGRAMA ===");
     VerificarEstiloGrafico();
+
+    Console.WriteLine("=== CORRECCIONES GEOMÉTRICAS (A-F) ===");
+    VerificarCorreccionesGeometricas();
 
     Console.WriteLine("=== AUDITORÍA DE TEXTOS ===");
     servicio.Establecer(a1);
