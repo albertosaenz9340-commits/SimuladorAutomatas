@@ -169,7 +169,7 @@ Los cinco componentes se introducen y validan juntos en el Módulo 1 y se muestr
 
 ### Estado inicial y estados finales
 
-El estado inicial `q0` es donde comienza el procesamiento y es el cuarto componente de `M`. Los estados de `F` se dibujan con doble circunferencia y se marcan con `*` en la tabla. El inicial se marca con `→`.
+El estado inicial `q0` es donde comienza el procesamiento y es el cuarto componente de `M`. Los estados de `F` se dibujan con relleno verde sólido y texto blanco, y se marcan con `*` en la tabla. El inicial se marca con `→`.
 
 ### Criterio de aceptación y rechazo
 
@@ -193,7 +193,7 @@ Al consumir todos los símbolos de `w` desde `q0`, se obtiene un estado alcanzad
 - `q0` pertenezca a `Q`.
 - Todo estado final pertenezca a `Q`.
 
-**Resultados.** Pestaña *Representación formal* con la quíntupla `M = (Q, Σ, δ, q0, F)` completa, sus cinco componentes por separado y la lista de `δ`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con círculos separados, doble circunferencia verde para finales, flecha de entrada azul rotulada *Inicio* que apunta a `q0`, arcos dirigidos con puntas de flecha grandes, bucles, etiquetas agrupadas por origen-destino y separadas de las flechas, desplazamiento arrastrando y zoom con la rueda. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
+**Resultados.** Pestaña *Representación formal* con la quíntupla `M = (Q, Σ, δ, q0, F)` completa, sus cinco componentes por separado y la lista de `δ`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con círculos blancos de borde azul marino, estado final verde sólido con texto blanco, botón azul *Inicio* con una flecha corta hacia `q0`, transiciones como arcos Bézier con puntas rellenas, bucles hacia el exterior y etiquetas en texto plano sin cajas, agrupadas por origen-destino, con desplazamiento arrastrando y zoom con la rueda. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
 
 ### Módulo 2. Búsqueda de las cinco palabras más cortas
 
@@ -282,7 +282,7 @@ Resultado verificado: **55 comprobaciones, 0 fallos**.
 7. **Registrar transiciones.** Escriba el origen, elija el símbolo y el destino y pulse *Agregar δ*. También puede editar las celdas de la rejilla y quitar la fila seleccionada.
 8. **Validar y construir.** Pulse **VALIDAR Y CONSTRUIR**. Si falta alguna transición o hay duplicados, se muestra el detalle de errores. Si todo es correcto, el autómata queda disponible para los tres módulos. Como alternativa, elija un caso en *Casos de prueba* y pulse *Carga*.
 9. **Interpretar la tabla.** En la pestaña *Tabla de transiciones*, cada fila es un estado y cada columna un símbolo; la celda indica el destino. `→` marca el inicial y `*` los finales.
-10. **Interpretar el diagrama.** En la pestaña *Diagrama (GDI+)*, los círculos son estados, la doble circunferencia verde resalta los finales (como `q4`), la flecha azul rotulada *Inicio* señala `q0`, las puntas grandes muestran el sentido de cada arco y las etiquetas agrupan los símbolos sin tapar las flechas. Los bucles son transiciones a uno mismo. Arrastre para desplazarse, use la rueda para ampliar y *Restablecer vista* para volver al centro.
+10. **Interpretar el diagrama.** En la pestaña *Diagrama (GDI+)*, los círculos blancos con borde azul marino son estados, el círculo verde sólido resalta los finales (como `q4`), el botón azul *Inicio* envía una flecha corta hacia `q0`, las puntas triangulares muestran el sentido de cada arco curvo y las etiquetas son texto plano sin recuadro. Los bucles son transiciones a uno mismo y se abren hacia el exterior del anillo. Arrastre para desplazarse, use la rueda para ampliar y *Restablecer vista* para volver al centro.
 11. **Acceder al módulo de búsqueda.** Cierre el constructor y pulse **2 BUSCAR PALABRAS ACEPTADAS**. La búsqueda se ejecuta al abrir y se puede repetir con *Buscar de nuevo*.
 12. **Consultar los resultados.** La tabla muestra hasta cinco palabras en orden de longitud y orden del alfabeto, con su longitud, recorrido y estado final. `ε` aparece cuando es aceptada.
 13. **Acceder al módulo de reconocimiento.** Pulse **3 RECONOCER UNA PALABRA**.

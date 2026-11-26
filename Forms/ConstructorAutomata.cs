@@ -360,17 +360,18 @@ public sealed class ConstructorAutomata : Form
         contenido.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         contenido.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var barra = Estilos.CrearRejilla(1, 3, 4);
+        var barra = Estilos.CrearRejilla(1, 4, 4);
         barra.ColumnStyles[0] = new ColumnStyle(SizeType.AutoSize);
         barra.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 100f);
         barra.ColumnStyles[2] = new ColumnStyle(SizeType.AutoSize);
-        var btnRestablecer = Estilos.CrearBoton("Restablecer vista", secundario: true);
-        btnRestablecer.Click += (_, _) => _grafo.RestablecerVista();
-        barra.Controls.Add(btnRestablecer, 0, 0);
+        barra.ColumnStyles[3] = new ColumnStyle(SizeType.AutoSize);
         var ayuda = Estilos.CrearEtiquetaAutomatica(
             "Arrastre: desplazar · Rueda: ampliar", Estilos.FuenteSubtitulo, Estilos.TextoSecundario);
-        barra.Controls.Add(ayuda, 1, 0);
-        barra.Controls.Add(_lblZoom, 2, 0);
+        barra.Controls.Add(ayuda, 0, 0);
+        var btnRestablecer = Estilos.CrearBoton("Restablecer vista", secundario: true);
+        btnRestablecer.Click += (_, _) => _grafo.RestablecerVista();
+        barra.Controls.Add(btnRestablecer, 2, 0);
+        barra.Controls.Add(_lblZoom, 3, 0);
         _grafo.VistaCambiada += (_, _) => ActualizarZoom();
 
         contenido.Controls.Add(barra, 0, 0);
