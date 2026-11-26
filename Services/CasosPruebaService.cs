@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using SimuladorAutomatas.Models;
 
 namespace SimuladorAutomatas.Services;
@@ -34,21 +33,8 @@ public sealed class CasoPrueba
         Transiciones = transiciones;
     }
 
-    /// <summary>Construye la terna M = (Q, Σ, δ) comprobando antes que sea válida.</summary>
+    /// <summary>Construye la quíntupla M = (Q, Σ, δ, q0, F) comprobando que sea válida.</summary>
     public Automata CrearAutomata()
-    {
-        Validar();
-        return new Automata(Nombre, Estados, Alfabeto, Transiciones);
-    }
-
-    /// <summary>Construye la configuración de aceptación (q0, F) del caso.</summary>
-    public ConfiguracionAceptacion CrearConfiguracion() => new(EstadoInicial, EstadosFinales);
-
-    /// <summary>Construye la terna y su configuración de aceptación.</summary>
-    public (Automata Automata, ConfiguracionAceptacion Configuracion) CrearDefinicion() =>
-        (CrearAutomata(), CrearConfiguracion());
-
-    private void Validar()
     {
         ResultadoValidacion validacion = new ValidacionAutomataService().Validar(
             Estados, Alfabeto, EstadoInicial, EstadosFinales, Transiciones);
@@ -58,7 +44,12 @@ public sealed class CasoPrueba
             throw new InvalidOperationException(
                 $"El caso de prueba '{Nombre}' no es válido: {string.Join(" ", validacion.Errores)}");
         }
+
+        return new Automata(Nombre, Estados, Alfabeto, EstadoInicial, EstadosFinales, Transiciones);
     }
+
+    /// <summary>El desplegable de casos muestra el nombre legible, no el tipo.</summary>
+    public override string ToString() => Nombre;
 }
 
 /// <summary>Cuatro autómatas de prueba, todos con exactamente cinco estados.</summary>
@@ -71,12 +62,12 @@ public static class CasosPruebaService
         return new[]
         {
             new CasoPrueba(
-                "Cantidad de ceros múltiplo de 5",
-                "Acepta las palabras con un número de símbolos 0 múltiplo de 5.",
+                "Cantidad de ceros ≡ 4 (mod 5)",
+                "Acepta las palabras con un número de símbolos 0 congruente con 4 módulo 5: empieza en q0 y termina en q4.",
                 new[] { "q0", "q1", "q2", "q3", "q4" },
                 new[] { '0', '1' },
                 "q0",
-                new[] { "q0" },
+                new[] { "q4" },
                 new[]
                 {
                     T("q0", '0', "q1"), T("q0", '1', "q0"),

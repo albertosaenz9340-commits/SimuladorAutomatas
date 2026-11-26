@@ -15,22 +15,28 @@ namespace SimuladorAutomatas.Controls;
 /// </summary>
 public sealed class GrafoAutomata : Panel
 {
-    private const float RadioEstado = 27f;
-    private const float SeparacionBucle = 52f;
+    private const float RadioEstado = 30f;
+    private const float SeparacionBucle = 45f;
+    private const float LongitudCabeza = 15f;
+    private const float LongitudCabezaInicial = 19f;
+    private const float CentroY = 20f;
 
-    private readonly Pen _penEstados = new(Color.FromArgb(35, 70, 110), 2f);
-    private readonly Pen _penFinales = new(Color.FromArgb(22, 121, 76), 2f);
-    private readonly Pen _penTransiciones = new(Color.FromArgb(70, 90, 115), 2f);
-    private readonly Pen _penInicial = new(Color.FromArgb(0, 122, 204), 2.5f);
+    private static readonly Color ColorInicial = Color.FromArgb(0, 105, 190);
+    private static readonly Color ColorFinal = Color.FromArgb(16, 122, 70);
+    private static readonly Color ColorContorno = Color.FromArgb(20, 45, 70);
+
+    private readonly Pen _penEstados = new(Color.FromArgb(96, 165, 224), 2.4f);
+    private readonly Pen _penFinales = new(Color.FromArgb(22, 150, 85), 2.8f);
+    private readonly Pen _penTransiciones = new(Color.FromArgb(55, 75, 100), 2.4f);
+    private readonly Pen _penInicial = new(ColorInicial, 3.5f);
     private readonly Brush _rellenoEstado = new SolidBrush(Color.White);
-    private readonly Brush _rellenoInicial = new SolidBrush(Color.FromArgb(219, 235, 250));
-    private readonly Brush _rellenoFinal = new SolidBrush(Color.FromArgb(226, 245, 232));
-    private readonly Brush _rellenoInicialFinal = new SolidBrush(Color.FromArgb(222, 240, 246));
+    private readonly Brush _rellenoInicial = new SolidBrush(Color.FromArgb(226, 240, 252));
+    private readonly Brush _rellenoFinal = new SolidBrush(ColorFinal);
+    private readonly Brush _rellenoInicialFinal = new SolidBrush(Color.FromArgb(24, 140, 92));
 
     private Automata? _automata;
-    private ConfiguracionAceptacion? _configuracion;
     private PointF _desplazamiento = PointF.Empty;
-    private float _escala = 1f;
+    private float _escala = 1.6f;
     private bool _arrastrando;
     private Point _ultimoPunto;
 
@@ -42,17 +48,6 @@ public sealed class GrafoAutomata : Panel
         set
         {
             _automata = value;
-            Invalidate();
-        }
-    }
-
-    /// <summary>Configuración de aceptación usada para marcar inicial y finales.</summary>
-    public ConfiguracionAceptacion? Configuracion
-    {
-        get => _configuracion;
-        set
-        {
-            _configuracion = value;
             Invalidate();
         }
     }
@@ -77,7 +72,7 @@ public sealed class GrafoAutomata : Panel
     public void RestablecerVista()
     {
         _desplazamiento = PointF.Empty;
-        _escala = 1f;
+        _escala = 1.6f;
         Invalidate();
         VistaCambiada?.Invoke(this, EventArgs.Empty);
     }
@@ -170,13 +165,19 @@ public sealed class GrafoAutomata : Panel
             return;
         }
 
+        using (var fuenteTitulo = new Font("Segoe UI", 13f, FontStyle.Bold))
+        using (var brochaTitulo = new SolidBrush(Color.FromArgb(25, 55, 90)))
+        {
+            g.DrawString("Automata finito determinista", fuenteTitulo, brochaTitulo, 14f, 10f);
+        }
+
         g.TranslateTransform(ClientSize.Width / 2f + _desplazamiento.X,
-                             ClientSize.Height / 2f + _desplazamiento.Y);
+                             ClientSize.Height / 2f + CentroY + _desplazamiento.Y);
         g.ScaleTransform(_escala, _escala);
 
         Dictionary<string, PointF> posiciones = CalcularPosiciones(_automata);
         DibujarTransiciones(g, _automata, posiciones);
-        DibujarEstados(g, _automata, posiciones, Configuracion);
+        DibujarEstados(g, _automata, posiciones);
     }
 
     private static Dictionary<string, PointF> CalcularPosiciones(Automata automata)
@@ -189,11 +190,12 @@ public sealed class GrafoAutomata : Panel
             return posiciones;
         }
 
-        float radio = Math.Max(100f, cantidad * 25f);
-        double inicio = cantidad <= 2 ? 0 : -Math.PI / 2;
+        float radio = Math.Max(85f, cantidad * 20f);
         for (int i = 0; i < cantidad; i++)
         {
-            double angulo = inicio + (2 * Math.PI * i / cantidad);
+            // El primer estado queda a la derecha; los demás siguen el pentágono
+            // en sentido antihorario: arriba, izquierda, abajo-izquierda, abajo-derecha.
+            double angulo = -2 * Math.PI * i / cantidad;
             float x = (float)(radio * Math.Cos(angulo));
             float y = (float)(radio * Math.Sin(angulo));
             posiciones[automata.Estados[i]] = new PointF(x, y);
@@ -251,9 +253,9 @@ public sealed class GrafoAutomata : Panel
         float px = -uy;
         float py = ux;
 
-        PointF inicio = new(origen.X + ux * RadioEstado, origen.Y + uy * RadioEstado);
-        PointF fin = new(destino.X - ux * (RadioEstado + 3f), destino.Y - uy * (RadioEstado + 3f));
-        float curva = reciprocada ? 38f : 0f;
+        PointF inicio = new(origen.X + ux * (RadioEstado + 1f), origen.Y + uy * (RadioEstado + 1f));
+        PointF fin = new(destino.X - ux * (RadioEstado + 2f), destino.Y - uy * (RadioEstado + 2f));
+        float curva = reciprocada ? 48f : 0f;
 
         PointF control1 = new(inicio.X + dx / 3f + px * curva, inicio.Y + dy / 3f + py * curva);
         PointF control2 = new(inicio.X + 2f * dx / 3f + px * curva, inicio.Y + 2f * dy / 3f + py * curva);
@@ -262,7 +264,8 @@ public sealed class GrafoAutomata : Panel
         DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y), _penTransiciones.Color);
 
         CalcularMitad(out float mx, out float my, control1, control2);
-        DibujarEtiqueta(g, etiqueta, new PointF(mx + px * (reciprocada ? 12f : 14f), my + py * (reciprocada ? 12f : 14f)));
+        float separacionEtiqueta = reciprocada ? 26f : 20f;
+        DibujarEtiqueta(g, etiqueta, new PointF(mx + px * separacionEtiqueta, my + py * separacionEtiqueta));
     }
 
     private static void CalcularMitad(out float x, out float y, PointF a, PointF b)
@@ -273,36 +276,48 @@ public sealed class GrafoAutomata : Panel
 
     private void DibujarBucle(Graphics g, PointF centro, string etiqueta)
     {
-        PointF inicio = PuntoEnCirculo(centro, RadioEstado, -52);
-        PointF fin = PuntoEnCirculo(centro, RadioEstado + 3f, -128);
-        PointF control1 = new(centro.X + 36f, centro.Y - RadioEstado - SeparacionBucle);
-        PointF control2 = new(centro.X - 36f, centro.Y - RadioEstado - SeparacionBucle);
+        // Los estados de la mitad inferior llevan el bucle por debajo; los demás, por arriba.
+        int lado = centro.Y > 0 ? 1 : -1;
+        PointF inicio = PuntoEnCirculo(centro, RadioEstado + 1f, 52 * lado);
+        PointF fin = PuntoEnCirculo(centro, RadioEstado + 2f, 128 * lado);
+        float yCurva = centro.Y + lado * (RadioEstado + SeparacionBucle);
+        PointF control1 = new(centro.X + 38f, yCurva);
+        PointF control2 = new(centro.X - 38f, yCurva);
 
         g.DrawBezier(_penTransiciones, inicio, control1, control2, fin);
         DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y), _penTransiciones.Color);
-        DibujarEtiqueta(g, etiqueta, new PointF(centro.X, centro.Y - RadioEstado - SeparacionBucle - 12f));
+        DibujarEtiqueta(g, etiqueta, new PointF(centro.X, centro.Y + lado * (RadioEstado + SeparacionBucle + 20f)));
     }
 
     private void DibujarEstados(
         Graphics g,
         Automata automata,
-        Dictionary<string, PointF> posiciones,
-        ConfiguracionAceptacion? configuracion)
+        Dictionary<string, PointF> posiciones)
     {
         foreach (string estado in automata.Estados)
         {
             PointF centro = posiciones[estado];
-            bool esInicial = configuracion is not null &&
-                             string.Equals(estado, configuracion.EstadoInicial, StringComparison.Ordinal);
-            bool esFinal = configuracion?.EsFinal(estado) ?? false;
+            bool esInicial = string.Equals(estado, automata.EstadoInicial, StringComparison.Ordinal);
+            bool esFinal = automata.EsFinal(estado);
 
             if (esInicial)
             {
-                PointF cola = new(centro.X - RadioEstado - 52f, centro.Y);
-                PointF punta = new(centro.X - RadioEstado - 3f, centro.Y);
+                float colaX = centro.X + RadioEstado + 92f;
+                float puntaX = centro.X + RadioEstado + 4f;
+                PointF cola = new(colaX, centro.Y);
+                PointF punta = new(puntaX, centro.Y);
                 g.DrawLine(_penInicial, cola, punta);
-                DibujarCabeza(g, punta, new PointF(1, 0), _penInicial.Color);
-                DibujarEtiqueta(g, "inicio", new PointF(centro.X - RadioEstado - 52f, centro.Y - 20f), 8.5f);
+                DibujarCabeza(g, punta, new PointF(-1, 0), ColorInicial, LongitudCabezaInicial);
+                DibujarEtiqueta(g, "Inicio", new PointF(colaX - 34f, centro.Y - 26f), 10f,
+                    ColorInicial, Color.White, ColorInicial);
+            }
+
+            if (esFinal)
+            {
+                using var brillo = new SolidBrush(Color.FromArgb(45, ColorFinal));
+                g.FillEllipse(brillo,
+                    centro.X - RadioEstado - 11f, centro.Y - RadioEstado - 11f,
+                    (RadioEstado + 11f) * 2, (RadioEstado + 11f) * 2);
             }
 
             Brush relleno = esInicial && esFinal
@@ -310,18 +325,19 @@ public sealed class GrafoAutomata : Panel
                 : esInicial ? _rellenoInicial : esFinal ? _rellenoFinal : _rellenoEstado;
 
             g.FillEllipse(relleno, centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2);
-            g.DrawEllipse(_penEstados, centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2);
+            g.DrawEllipse(esFinal ? _penFinales : _penEstados,
+                centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2);
 
             if (esFinal)
             {
-                const float separacion = 5f;
+                const float separacion = 6f;
                 g.DrawEllipse(_penFinales,
                     centro.X - RadioEstado - separacion, centro.Y - RadioEstado - separacion,
                     (RadioEstado + separacion) * 2, (RadioEstado + separacion) * 2);
             }
 
-            using var fuente = new Font("Segoe UI", 11f, FontStyle.Bold);
-            using var brochaTexto = new SolidBrush(Color.FromArgb(25, 45, 70));
+            using var fuente = new Font("Segoe UI", 12f, FontStyle.Bold);
+            using var brochaTexto = new SolidBrush(esFinal ? Color.White : ColorContorno);
             using var formato = new StringFormat
             {
                 Alignment = StringAlignment.Center,
@@ -341,11 +357,11 @@ public sealed class GrafoAutomata : Panel
             centro.Y + (float)(radio * Math.Sin(radianes)));
     }
 
-    private static void DibujarCabeza(Graphics g, PointF punta, PointF direccion, Color color)
+    private static void DibujarCabeza(
+        Graphics g, PointF punta, PointF direccion, Color color, float longitud = LongitudCabeza)
     {
         double angulo = Math.Atan2(direccion.Y, direccion.X);
-        const double apertura = 0.42;
-        const float longitud = 11f;
+        const double apertura = 0.36;
 
         PointF lado1 = new(
             (float)(punta.X - longitud * Math.Cos(angulo - apertura)),
@@ -354,23 +370,33 @@ public sealed class GrafoAutomata : Panel
             (float)(punta.X - longitud * Math.Cos(angulo + apertura)),
             (float)(punta.Y - longitud * Math.Sin(angulo + apertura)));
 
+        PointF[] vertices = { punta, lado1, lado2 };
         using var brocha = new SolidBrush(color);
-        g.FillPolygon(brocha, new[] { punta, lado1, lado2 });
+        using var contorno = new Pen(ColorContorno, 0.9f) { LineJoin = LineJoin.Round };
+        g.FillPolygon(brocha, vertices);
+        g.DrawPolygon(contorno, vertices);
     }
 
-    private static void DibujarEtiqueta(Graphics g, string texto, PointF centro, float tamano = 10f)
+    private static void DibujarEtiqueta(
+        Graphics g,
+        string texto,
+        PointF centro,
+        float tamano = 10.5f,
+        Color? colorFondo = null,
+        Color? colorTexto = null,
+        Color? colorBorde = null)
     {
         using var fuente = new Font("Segoe UI", tamano, FontStyle.Bold);
         SizeF medida = g.MeasureString(texto, fuente);
         var rectangulo = new RectangleF(
-            centro.X - medida.Width / 2f - 4f,
-            centro.Y - medida.Height / 2f - 2f,
-            medida.Width + 8f,
-            medida.Height + 4f);
+            centro.X - medida.Width / 2f - 6f,
+            centro.Y - medida.Height / 2f - 3f,
+            medida.Width + 12f,
+            medida.Height + 6f);
 
-        using var fondo = new SolidBrush(Color.FromArgb(238, 244, 250));
-        using var borde = new Pen(Color.FromArgb(205, 218, 232));
-        using var brochaTexto = new SolidBrush(Color.FromArgb(25, 50, 80));
+        using var fondo = new SolidBrush(colorFondo ?? Color.FromArgb(250, 252, 255));
+        using var borde = new Pen(colorBorde ?? Color.FromArgb(180, 198, 216));
+        using var brochaTexto = new SolidBrush(colorTexto ?? Color.FromArgb(25, 50, 80));
         using var formato = new StringFormat
         {
             Alignment = StringAlignment.Center,

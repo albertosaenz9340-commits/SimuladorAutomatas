@@ -13,7 +13,7 @@
 
 ### Descripción general
 
-Aplicación de escritorio para Windows que permite construir un autómata finito determinista a partir de su definición formal, visualizarlo como un diagrama dibujado con GDI+, buscar las cinco palabras aceptadas más cortas y comprobar si una palabra concreta pertenece al lenguaje reconocido. El autómata se define como la terna `M = (Q, Σ, δ)` con `Q` de exactamente cinco nodos; el estado inicial `q0` y los estados finales `F` se gestionan como una configuración de aceptación separada. Los tres módulos comparten una única definición: al construir una nueva se reemplaza la anterior.
+Aplicación de escritorio para Windows que permite construir un autómata finito determinista a partir de su definición formal, visualizarlo como un diagrama dibujado con GDI+, buscar las cinco palabras aceptadas más cortas y comprobar si una palabra concreta pertenece al lenguaje reconocido. El autómata se define como la quíntupla `M = (Q, Σ, δ, q0, F)` con `Q` de exactamente cinco nodos. Los tres módulos comparten una única definición: al construir una nueva se reemplaza la anterior.
 
 ### Objetivo general
 
@@ -21,13 +21,13 @@ Desarrollar una aplicación completa, funcional y organizada que implemente corr
 
 ### Objetivos específicos
 
-- Definir la terna `M = (Q, Σ, δ)` con exactamente cinco nodos mediante una interfaz gráfica construida por código.
-- Configurar por separado el estado inicial `q0` y el conjunto `F` de estados finales.
+- Definir la quíntupla `M = (Q, Σ, δ, q0, F)` con exactamente cinco nodos mediante una interfaz gráfica construida por código.
+- Configurar el estado inicial `q0` y el conjunto `F` de estados finales como parte de esa quíntupla.
 - Validar que la definición sea un AFD completo, no ambiguo y con cinco estados.
 - Mostrar la representación formal, la tabla de transiciones y el diagrama gráfico.
 - Encontrar hasta cinco palabras aceptadas de longitud máxima 10, ordenadas por longitud y por el orden del alfabeto.
 - Procesar palabras arbitrarias informando del recorrido de estados, del resultado y de los símbolos inválidos.
-- Mantener una sola definición compartida entre los tres módulos (terna y configuración de aceptación).
+- Mantener una sola definición compartida entre los tres módulos (quíntupla completa).
 
 ### Alcance del sistema
 
@@ -55,7 +55,7 @@ No están incluidos: AFD no deterministas, conversiones entre autómatas, operac
 
 Se aplica una separación por responsabilidades sobre programación orientada a objetos:
 
-- **Models:** estructura de datos de la terna `M = (Q, Σ, δ)` y de la configuración de aceptación `(q0, F)`.
+- **Models:** estructura de datos de la quíntupla `M = (Q, Σ, δ, q0, F)`.
 - **Services:** validación, estado compartido, reconocimiento, búsqueda y casos de prueba.
 - **Forms:** interfaz de usuario de cada módulo.
 - **Controls:** control personalizado de dibujo.
@@ -84,10 +84,9 @@ El equipo de desarrollo verificó la compilación con el SDK instalado en el ent
 | --- | --- |
 | `Models/Estado.cs` | Nombre de un estado con igualdad exacta por cadena. |
 | `Models/Transicion.cs` | Tripleta `(origen, símbolo, destino)` que representa `δ`. |
-| `Models/Automata.cs` | Terna inmutable `M = (Q, Σ, δ)` con cinco estados; expone `Estados`, `Alfabeto`, `Transiciones`, `IntentarTransitar` y `RepresentacionFormal(configuracion)`. |
-| `Models/ConfiguracionAceptacion.cs` | Datos de aceptación `q0` y `F`, externos a la terna; ofrece `EsFinal` y `AceptaPalabraVacia`. |
-| `Services/ValidacionAutomataService.cs` | Valida la terna (`ValidarDefinicion`) con exactamente cinco nodos y la configuración de aceptación (`Validar`); devuelve `ResultadoValidacion`. |
-| `Services/AutomataService.cs` | Singleton con `Actual`, `ConfiguracionActual`, `Establecer(...)`, `Limpiar()` y el evento `AutomataCambiado`. |
+| `Models/Automata.cs` | Quíntupla inmutable `M = (Q, Σ, δ, q0, F)` con cinco estados; expone `Estados`, `Alfabeto`, `EstadoInicial`, `EstadosFinales`, `Transiciones`, `IntentarTransitar` y `RepresentacionFormal`. |
+| `Services/ValidacionAutomataService.cs` | Valida la quíntupla con exactamente cinco nodos y devuelve `ResultadoValidacion`. |
+| `Services/AutomataService.cs` | Singleton con `Actual`, `Establecer(...)`, `Limpiar()` y el evento `AutomataCambiado`. |
 | `Services/ReconocimientoService.cs` | Normaliza la entrada, valida símbolos, aplica `δ` desde `q0` y produce `ResultadoReconocimiento`. |
 | `Services/BusquedaPalabrasService.cs` | Calcula la búsqueda ordenada de palabras aceptadas desde `q0` con conteo dinámico. |
 | `Services/CasosPruebaService.cs` | Cuatro definiciones precargadas y validadas antes de construirse. |
@@ -100,11 +99,11 @@ El equipo de desarrollo verificó la compilación con el SDK instalado en el ent
 
 ### Forma en que se comparte el autómata
 
-`AutomataService.Instancia` es un singleton al que acceden los cuatro formularios. El constructor valida la terna y su configuración de aceptación y llama a `Establecer(...)`. Los módulos 2 y 3 leen `AutomataService.Instancia.Actual` y `AutomataService.Instancia.ConfiguracionActual`; si no existen, el menú les impide abrirse y los propios formularios muestran un aviso. La lógica de reconocimiento sólo existe en `ReconocimientoService`, no se repite en los formularios.
+`AutomataService.Instancia` es un singleton al que acceden los cuatro formularios. El constructor valida la quíntupla completa y llama a `Establecer(...)`. Los módulos 2 y 3 leen `AutomataService.Instancia.Actual`, que contiene `q0` y `F` junto con `Q`, `Σ` y `δ`; si no existe, el menú les impide abrirse y los propios formularios muestran un aviso. La lógica de reconocimiento sólo existe en `ReconocimientoService`, no se repite en los formularios.
 
 ### Algoritmos utilizados
 
-- **Reconocimiento:** recorrido secuencial de la palabra desde el `q0` de la configuración de aceptación. Para cada símbolo se comprueba pertenencia a `Σ`, se aplica `δ` y se añade el estado alcanzado al recorrido. La palabra es aceptada si el último estado pertenece a `F`.
+- **Reconocimiento:** recorrido secuencial de la palabra desde el estado inicial `q0` de la quíntupla. Para cada símbolo se comprueba pertenencia a `Σ`, se aplica `δ` y se añade el estado alcanzado al recorrido. La palabra es aceptada si el último estado pertenece a `F`.
 - **Búsqueda:** para cada par `(estado, longitud)` se calcula cuántas palabras aceptadas de esa longitud salen de dicho estado, saturando el conteo en 5. Después se enumeran las ramas útiles en orden de símbolos, de longitud 0 a 10. Es una enumeración ordenada equivalente en su resultado a una BFS por niveles, pero con poda exacta: no genera palabras que no pueden ser aceptadas y no fusiona palabras distintas que llegan al mismo estado.
 
 ## 12.3. Fundamentos teóricos
@@ -150,25 +149,27 @@ El conjunto `Σ*` junto con la concatenación constituye el monoide libre: la op
 
 ### Autómatas finitos deterministas
 
-En este proyecto un AFD se define mediante la terna:
+En este proyecto un AFD se define mediante la quíntupla exigida en el requerimiento:
 
-`M = (Q, Σ, δ)`
+`M = (Q, Σ, δ, q0, F)`
 
 donde:
 
 - `Q`: conjunto finito de exactamente cinco estados (nodos).
 - `Σ`: alfabeto finito de entrada.
 - `δ: Q × Σ → Q`: función de transición total.
+- `q0 ∈ Q`: estado inicial.
+- `F ⊆ Q`: conjunto de estados finales.
 
-El estado inicial `q0 ∈ Q` y el conjunto `F ⊆ Q` de estados finales se expresan como una **configuración de aceptación** `(q0, F)` separada de la terna. Es una descomposición de la definición clásica de cinco componentes: `δ` describe la estructura del autómata, mientras que `q0` y `F` determinan el lenguaje que se reconoce.
+Los cinco componentes se introducen y validan juntos en el Módulo 1 y se muestran en la pestaña *Representación formal*. `δ` describe la estructura del autómata, mientras que `q0` y `F` determinan el lenguaje que se reconoce.
 
 ### Función de transición
 
 `δ(q, a)` indica el único estado al que se llega desde `q` al leer `a`. Por ser una función completa debe existir exactamente una transición para cada par estado-símbolo, es decir `|Q| × |Σ|` transiciones. No se permiten transiciones duplicadas ni destinos inexistentes.
 
-### Configuración de aceptación: estados inicial y finales
+### Estado inicial y estados finales
 
-El estado inicial `q0` es donde comienza el procesamiento y pertenece a la configuración de aceptación, no a la terna `M`. Los estados de `F` se dibujan con doble circunferencia y se marcan con `*` en la tabla. El inicial se marca con `→`.
+El estado inicial `q0` es donde comienza el procesamiento y es el cuarto componente de `M`. Los estados de `F` se dibujan con doble circunferencia y se marcan con `*` en la tabla. El inicial se marca con `→`.
 
 ### Criterio de aceptación y rechazo
 
@@ -178,9 +179,9 @@ Al consumir todos los símbolos de `w` desde `q0`, se obtiene un estado alcanzad
 
 ### Módulo 1. Construcción de autómatas finitos
 
-**Propósito.** Definir y validar la terna `M = (Q, Σ, δ)` con cinco nodos y su configuración de aceptación `(q0, F)` para que la utilicen los otros dos módulos.
+**Propósito.** Definir y validar la quíntupla `M = (Q, Σ, δ, q0, F)` con cinco nodos para que la utilicen los otros dos módulos.
 
-**Entradas.** Exactamente cinco estados (separados por comas, punto y coma o espacios), símbolos del alfabeto (cada carácter distinto de separador se trata como un símbolo) y transiciones forman la terna. El estado inicial seleccionable y los estados finales marcados con casillas forman la configuración de aceptación. Las transiciones se pueden agregar con los controles `Origen`, `Símbolo` y `Destino`, editar directamente en las columnas desplegables de la rejilla y quitar con el botón correspondiente. También se pueden agregar o quitar estados y símbolos en cualquier momento, siempre que `Q` quede con cinco nodos.
+**Entradas.** Exactamente cinco estados (separados por comas, punto y coma o espacios), símbolos del alfabeto (cada carácter distinto de separador se trata como un símbolo), el estado inicial seleccionable, los estados finales marcados con casillas y las transiciones forman la quíntupla. Las transiciones se pueden agregar con los controles `Origen`, `Símbolo` y `Destino`, editar directamente en las columnas desplegables de la rejilla y quitar con el botón correspondiente. También se pueden agregar o quitar estados y símbolos en cualquier momento, siempre que `Q` quede con cinco nodos.
 
 **Procesamiento.** El botón **VALIDAR Y CONSTRUIR** comprueba que:
 
@@ -192,7 +193,7 @@ Al consumir todos los símbolos de `w` desde `q0`, se obtiene un estado alcanzad
 - `q0` pertenezca a `Q`.
 - Todo estado final pertenezca a `Q`.
 
-**Resultados.** Pestaña *Representación formal* con la terna `M = (Q, Σ, δ)`, la lista de `δ` y, por separado, la configuración `q0` / `F`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con círculos, doble circunferencia para finales, flecha de entrada, arcos dirigidos, bucles, etiquetas agrupadas por origen-destino, desplazamiento arrastrando y zoom con la rueda. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
+**Resultados.** Pestaña *Representación formal* con la quíntupla `M = (Q, Σ, δ, q0, F)` completa, sus cinco componentes por separado y la lista de `δ`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con círculos separados, doble circunferencia verde para finales, flecha de entrada azul rotulada *Inicio* que apunta a `q0`, arcos dirigidos con puntas de flecha grandes, bucles, etiquetas agrupadas por origen-destino y separadas de las flechas, desplazamiento arrastrando y zoom con la rueda. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
 
 ### Módulo 2. Búsqueda de las cinco palabras más cortas
 
@@ -279,9 +280,9 @@ Resultado verificado: **55 comprobaciones, 0 fallos**.
 5. **Definir estados y alfabeto.** Las listas muestran lo agregado. Los botones *Quitar* eliminan el elemento seleccionado y sus transiciones relacionadas; `Q` debe quedar con cinco nodos.
 6. **Establecer inicial y finales.** Elija `q0` en el desplegable *Inicial q0:* y marque las casillas de los estados finales en *Finales F*.
 7. **Registrar transiciones.** Escriba el origen, elija el símbolo y el destino y pulse *Agregar δ*. También puede editar las celdas de la rejilla y quitar la fila seleccionada.
-8. **Validar y construir.** Pulse **VALIDAR Y CONSTRUIR**. Si falta alguna transición o hay duplicados, se muestra el detalle de errores. Si todo es correcto, el autómata queda disponible para los tres módulos. Como alternativa, elija un caso en *Casos de prueba* y pulse *Cargar*.
+8. **Validar y construir.** Pulse **VALIDAR Y CONSTRUIR**. Si falta alguna transición o hay duplicados, se muestra el detalle de errores. Si todo es correcto, el autómata queda disponible para los tres módulos. Como alternativa, elija un caso en *Casos de prueba* y pulse *Carga*.
 9. **Interpretar la tabla.** En la pestaña *Tabla de transiciones*, cada fila es un estado y cada columna un símbolo; la celda indica el destino. `→` marca el inicial y `*` los finales.
-10. **Interpretar el diagrama.** En la pestaña *Diagrama (GDI+)*, los círculos son estados, la doble circunferencia indica final, la flecha azul señala el inicio y cada arco muestra los símbolos agrupados. Los bucles son transiciones a uno mismo. Arrastre para desplazarse, use la rueda para ampliar y *Restablecer vista* para volver al centro.
+10. **Interpretar el diagrama.** En la pestaña *Diagrama (GDI+)*, los círculos son estados, la doble circunferencia verde resalta los finales (como `q4`), la flecha azul rotulada *Inicio* señala `q0`, las puntas grandes muestran el sentido de cada arco y las etiquetas agrupan los símbolos sin tapar las flechas. Los bucles son transiciones a uno mismo. Arrastre para desplazarse, use la rueda para ampliar y *Restablecer vista* para volver al centro.
 11. **Acceder al módulo de búsqueda.** Cierre el constructor y pulse **2 BUSCAR PALABRAS ACEPTADAS**. La búsqueda se ejecuta al abrir y se puede repetir con *Buscar de nuevo*.
 12. **Consultar los resultados.** La tabla muestra hasta cinco palabras en orden de longitud y orden del alfabeto, con su longitud, recorrido y estado final. `ε` aparece cuando es aceptada.
 13. **Acceder al módulo de reconocimiento.** Pulse **3 RECONOCER UNA PALABRA**.
@@ -324,8 +325,7 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 │   ├── MenuPrincipal.cs             Menú y navegación
 │   └── ReconocimientoPalabras.cs    Módulo 3
 ├── Models/
-│   ├── Automata.cs                  Terna M = (Q, Σ, δ) y función de transición
-│   ├── ConfiguracionAceptacion.cs   Estado inicial q0 y estados finales F
+│   ├── Automata.cs                  Quíntupla M = (Q, Σ, δ, q0, F)
 │   ├── Estado.cs                    Estado
 │   └── Transicion.cs                Transición
 ├── Pruebas/
@@ -347,23 +347,23 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 
 ## 12.9. Casos de prueba
 
-### Autómata 1 — Cantidad de ceros múltiplo de 5
+### Autómata 1 — Cantidad de ceros ≡ 4 (mod 5)
 
 | Campo | Valor |
 | --- | --- |
 | Q | `{q0, q1, q2, q3, q4}` |
 | Σ | `{0, 1}` |
 | q0 | `q0` |
-| F | `{q0}` |
+| F | `{q4}` |
 | Transiciones | δ(q0,0)=q1, δ(q1,0)=q2, δ(q2,0)=q3, δ(q3,0)=q4, δ(q4,0)=q0; δ(qi,1)=qi para los cinco estados |
 
 | Palabra | Resultado esperado | Verificado |
 | --- | --- | --- |
-| Cinco más cortas | `ε, 1, 11, 111, 1111` | Sí |
-| `00000` | Aceptada | Sí |
-| `0000` | Rechazada | Sí |
-| `ε` | Aceptada | Sí |
-| `1111` | Aceptada | Sí |
+| Cinco más cortas | `0000, 00001, 00010, 00100, 01000` | Sí |
+| `0000` | Aceptada (recorrido `q0 → q1 → q2 → q3 → q4`) | Sí |
+| `00000` | Rechazada | Sí |
+| `ε` | Rechazada | Sí |
+| `00001` | Aceptada | Sí |
 
 ### Autómata 2 — Palabras que terminan en abab
 
@@ -416,7 +416,7 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 | Búsqueda | Mensaje de «no se encontraron palabras aceptadas» | Sí |
 | `aaa`, `ε` | Rechazadas | Sí |
 
-Además se verificaron las condiciones de validación (incluida la exigencia de exactamente cinco nodos), el reemplazo de la terna y de su configuración de aceptación en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (55 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
+Además se verificaron las condiciones de validación (incluida la exigencia de exactamente cinco nodos), el reemplazo de la quíntupla en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (55 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
 
 ## 12.10. Limitaciones y consideraciones
 
@@ -425,8 +425,8 @@ Además se verificaron las condiciones de validación (incluida la exigencia de 
 - Cada símbolo del alfabeto es un carácter individual; los separadores `,`, `;`, `|` y los espacios no forman parte del alfabeto.
 - La búsqueda está limitada a longitud 10 y muestra como máximo cinco palabras, según la especificación.
 - El recorrido de búsqueda se ordena por longitud y por el orden de introducción de los símbolos; no se ofrece otro criterio de orden.
-- La definición (terna y configuración de aceptación) reside en memoria: al cerrar la aplicación se pierde. No hay guardado ni carga de definiciones desde archivo.
-- La terna `M = (Q, Σ, δ)` no incluye `q0` ni `F`; ambos se guardan por separado en `ConfiguracionAceptacion` y se pasan explícitamente a los servicios de búsqueda y reconocimiento.
+- La definición `M = (Q, Σ, δ, q0, F)` reside en memoria: al cerrar la aplicación se pierde. No hay guardado ni carga de definiciones desde archivo.
+- Los cinco componentes de la quíntupla se guardan juntos en una única instancia de `Automata`, compartida por los tres módulos; no hay estados de aceptación separados.
 - La representación gráfica es automática (distribución circular); no se permite arrastrar estados individualmente. Sí se permite desplazar y ampliar el conjunto.
 - La aplicación requiere Windows porque utiliza Windows Forms y GDI+.
 - El número de palabras de `Σ*` crece muy rápidamente; por eso la búsqueda usa poda basada en estados finales en lugar de enumerar todas las palabras hasta la longitud 10.

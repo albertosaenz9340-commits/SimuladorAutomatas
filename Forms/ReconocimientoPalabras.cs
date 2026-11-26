@@ -95,9 +95,8 @@ public sealed class ReconocimientoPalabras : Form
             }
 
             Automata automata = AutomataService.Instancia.Actual!;
-            ConfiguracionAceptacion configuracion = AutomataService.Instancia.ConfiguracionActual!;
             _resumen.Text = $"Autómata: {automata.Nombre}   |   Σ = {{{string.Join(", ", automata.Alfabeto)}}}   |   " +
-                            $"q0 = {configuracion.EstadoInicial}   |   F = {{{string.Join(", ", configuracion.EstadosFinales)}}}";
+                            $"q0 = {automata.EstadoInicial}   |   F = {{{string.Join(", ", automata.EstadosFinales)}}}";
             _mensaje.Text = "Escriba una palabra y pulse Procesar. Use ε (o deje el campo vacío) para la palabra vacía.";
         };
 
@@ -182,10 +181,7 @@ public sealed class ReconocimientoPalabras : Form
             return;
         }
 
-        ResultadoReconocimiento resultado = _servicio.Procesar(
-            AutomataService.Instancia.ObtenerActualOExcepcion(),
-            AutomataService.Instancia.ObtenerConfiguracionOExcepcion(),
-            _txtPalabra.Text);
+        ResultadoReconocimiento resultado = _servicio.Procesar(AutomataService.Instancia.Actual!, _txtPalabra.Text);
 
         _txtSimbolos.Text = resultado.SimbolosProcesados.Count == 0
             ? "ε (ningún símbolo)"

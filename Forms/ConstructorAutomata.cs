@@ -12,9 +12,9 @@ using SimuladorAutomatas.UI;
 namespace SimuladorAutomatas.Forms;
 
 /// <summary>
-/// Módulo 1: permite definir la terna M = (Q, Σ, δ) y, por separado, el estado
-/// inicial y los estados finales; valida el AFD, publica la instancia compartida
-/// y muestra su representación formal, su tabla de transiciones y su diagrama GDI+.
+/// Módulo 1: permite definir estados, alfabeto, estado inicial, estados finales
+/// y transiciones; valida el AFD, publica la instancia compartida y muestra su
+/// representación formal, su tabla de transiciones y su diagrama GDI+.
 /// </summary>
 public sealed class ConstructorAutomata : Form
 {
@@ -54,7 +54,7 @@ public sealed class ConstructorAutomata : Form
 
     private readonly DataGridView _dgvTabla = Estilos.CrearTabla();
     private readonly GrafoAutomata _grafo = new();
-    private readonly Label _lblZoom = Estilos.CrearEtiquetaAutomatica("Zoom: 100%", Estilos.FuenteNegrita);
+    private readonly Label _lblZoom = Estilos.CrearEtiquetaAutomatica("Zoom: 160%", Estilos.FuenteNegrita);
 
     public ConstructorAutomata()
     {
@@ -71,11 +71,10 @@ public sealed class ConstructorAutomata : Form
         ActualizarVistaPrevia();
 
         Automata? existente = AutomataService.Instancia.Actual;
-        ConfiguracionAceptacion? configuracionExistente = AutomataService.Instancia.ConfiguracionActual;
-        if (existente is not null && configuracionExistente is not null)
+        if (existente is not null)
         {
             _lblMensaje.Text = $"Hay un autómata construido previamente: {existente.Nombre}.";
-            MostrarAutomata(existente, configuracionExistente);
+            MostrarAutomata(existente);
         }
     }
 
@@ -93,7 +92,7 @@ public sealed class ConstructorAutomata : Form
         raiz.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         raiz.Controls.Add(Estilos.CrearCabecera(
             "Construcción de autómatas finitos",
-            "Defina la terna M = (Q, Σ, δ) con exactamente 5 nodos y configure q0 y F por separado. Puede agregar, modificar y eliminar estados y transiciones antes de confirmar."), 0, 0);
+            "Defina la 5-tupla M = (Q, Σ, δ, q0, F) con exactamente 5 nodos."), 0, 0);
 
         var division = new SplitContainer
         {
@@ -117,6 +116,7 @@ public sealed class ConstructorAutomata : Form
         division.Panel2.Controls.Add(CrearPanelResultados());
         raiz.Controls.Add(division, 0, 1);
         Controls.Add(raiz);
+        ActualizarZoom();
     }
 
     private TableLayoutPanel CrearPanelDefinicion()
@@ -173,12 +173,12 @@ public sealed class ConstructorAutomata : Form
         rejilla.Controls.Add(Estilos.CrearEtiqueta("Caso:"), 0, 0);
         rejilla.Controls.Add(_cmbCasos, 1, 0);
 
-        var btnCargar = Estilos.CrearBoton("Cargar");
+        var btnCargar = Estilos.CrearBoton("Carga");
         btnCargar.Click += CargarCaso_Click;
         rejilla.Controls.Add(btnCargar, 2, 0);
 
         var ayuda = Estilos.CrearTextoInformativo(
-            "Seleccione un caso y pulse Cargar para probar los ejemplos incluidos.");
+            "Seleccione un caso y pulse Carga para probar los ejemplos incluidos.");
         ayuda.MinimumSize = new Size(0, 60);
         ayuda.ForeColor = Estilos.TextoSecundario;
         ayuda.BackColor = Estilos.Superficie;
@@ -202,7 +202,7 @@ public sealed class ConstructorAutomata : Form
 
         rejilla.Controls.Add(Estilos.CrearEtiqueta("Nuevo:"), 0, 0);
         rejilla.Controls.Add(_txtNuevoEstado, 1, 0);
-        var btnAgregar = Estilos.CrearBoton("Agregar");
+        var btnAgregar = Estilos.CrearBoton("Agrega");
         btnAgregar.Click += AgregarEstado_Click;
         rejilla.Controls.Add(btnAgregar, 2, 0);
 
@@ -232,7 +232,7 @@ public sealed class ConstructorAutomata : Form
 
         rejilla.Controls.Add(Estilos.CrearEtiqueta("Símbolos:"), 0, 0);
         rejilla.Controls.Add(_txtNuevoSimbolo, 1, 0);
-        var btnAgregar = Estilos.CrearBoton("Agregar");
+        var btnAgregar = Estilos.CrearBoton("Agrega");
         btnAgregar.Click += AgregarSimbolo_Click;
         rejilla.Controls.Add(btnAgregar, 2, 0);
 
@@ -578,7 +578,7 @@ public sealed class ConstructorAutomata : Form
         }
 
         Automata construido = AutomataService.Instancia.Actual!;
-        MostrarAutomata(construido, AutomataService.Instancia.ConfiguracionActual!);
+        MostrarAutomata(construido);
         Mensaje($"Autómata construido: {construido.Nombre}. Ya puede usar los módulos 2 y 3.");
         MessageBox.Show(
             "El autómata se construyó correctamente y está disponible en los tres módulos.",
@@ -628,9 +628,9 @@ public sealed class ConstructorAutomata : Form
 
         ActualizarListas(conservarSeleccion: false);
 
-        (Automata automata, ConfiguracionAceptacion configuracion) = caso.CrearDefinicion();
-        AutomataService.Instancia.Establecer(automata, configuracion);
-        MostrarAutomata(automata, configuracion);
+        Automata automata = caso.CrearAutomata();
+        AutomataService.Instancia.Establecer(automata);
+        MostrarAutomata(automata);
         Mensaje($"Caso cargado: {caso.Nombre}. {caso.Descripcion}");
     }
 
@@ -806,26 +806,24 @@ public sealed class ConstructorAutomata : Form
             _dgvTabla.Columns.Clear();
             _dgvTabla.Rows.Clear();
             _txtFormal.Text =
-                "Definición incompleta. La vista previa se mostrará cuando la terna con 5 nodos sea válida." +
+                "Definición incompleta. La vista previa se mostrará cuando la 5-tupla con 5 nodos sea válida." +
                 Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine, resultado.Errores);
             return;
         }
 
-        var vistaPrevia = new Automata("Vista previa", _estados, _alfabeto, _transiciones);
-        var configuracionPrevia = new ConfiguracionAceptacion(inicial, FinalesSeleccionados());
-        MostrarAutomata(vistaPrevia, configuracionPrevia);
+        var vistaPrevia = new Automata("Vista previa", _estados, _alfabeto, inicial, FinalesSeleccionados(), _transiciones);
+        MostrarAutomata(vistaPrevia);
     }
 
-    private void MostrarAutomata(Automata automata, ConfiguracionAceptacion configuracion)
+    private void MostrarAutomata(Automata automata)
     {
-        _txtFormal.Text = automata.RepresentacionFormal(configuracion);
-        MostrarTabla(automata, configuracion);
+        _txtFormal.Text = automata.RepresentacionFormal;
+        MostrarTabla(automata);
         _grafo.Automata = automata;
-        _grafo.Configuracion = configuracion;
     }
 
-    private void MostrarTabla(Automata automata, ConfiguracionAceptacion configuracion)
+    private void MostrarTabla(Automata automata)
     {
         _dgvTabla.Columns.Clear();
         _dgvTabla.Rows.Clear();
@@ -851,8 +849,8 @@ public sealed class ConstructorAutomata : Form
 
         foreach (string estado in automata.Estados)
         {
-            bool esInicial = estado == configuracion.EstadoInicial;
-            bool esFinal = configuracion.EsFinal(estado);
+            bool esInicial = estado == automata.EstadoInicial;
+            bool esFinal = automata.EsFinal(estado);
             string marcador = (esInicial ? "→" : string.Empty) + (esFinal ? "*" : string.Empty);
             var valores = new List<object> { $"{marcador}{estado}" };
             valores.AddRange(automata.Alfabeto.Select(s => (object)automata.ObtenerDestino(estado, s)!));

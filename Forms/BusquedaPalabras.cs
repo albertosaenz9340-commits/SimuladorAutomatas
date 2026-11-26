@@ -101,8 +101,7 @@ public sealed class BusquedaPalabras : Form
     private void EjecutarBusqueda()
     {
         Automata automata = AutomataService.Instancia.ObtenerActualOExcepcion();
-        ConfiguracionAceptacion configuracion = AutomataService.Instancia.ObtenerConfiguracionOExcepcion();
-        ResultadoBusqueda resultado = _servicio.Buscar(automata, configuracion);
+        ResultadoBusqueda resultado = _servicio.Buscar(automata);
 
         _resumen.Text = $"Autómata: {automata.Nombre}   |   Σ = {{{string.Join(", ", automata.Alfabeto)}}}   |   " +
                         $"longitud máxima = {BusquedaPalabrasService.LongitudMaxima}   |   máximo = {BusquedaPalabrasService.LimitePalabras} palabras";

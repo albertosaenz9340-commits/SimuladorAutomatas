@@ -1,18 +1,18 @@
 Datos de entrada
-Nombre: Cantidad de ceros múltiplo de 5
-Descripción: Acepta las palabras con un número de símbolos 0 múltiplo de 5.
+Nombre: Cantidad de ceros ≡ 4 (mod 5)
+Descripción: Acepta las palabras con un número de símbolos 0 congruente con 4 módulo 5: empieza en q0 y termina en q4.
 
-Conjunto Q (estados: 5 nodos)
+Conjunto Q (estados, exactamente 5 nodos)
 q0, q1, q2, q3, q4
 
 Alfabeto Σ
 0, 1
 
-Estado inicial
+Estado inicial q0
 q0
 
 Estados finales F
-q0
+q4
 
 Función de transición δ
 Origen	Símbolo	Destino
@@ -28,18 +28,25 @@ q4	0	q0
 q4	1	q4
 
 Representación formal
-M = ({q0, q1, q2, q3, q4}, {0, 1}, δ)
-Configuración de aceptación: q0 = q0, F = {q0}
+M = ({q0, q1, q2, q3, q4}, {0, 1}, δ, q0, {q4})
 
 Resultados esperados
-- Acepta: ε, 1, 11, 111, 1111, 00000, 0000000000, ... (número de 0 múltiplo de 5)
-- Rechaza: 0, 00, 000, 0000, 01, ... (número de 0 no múltiplo de 5)
+- Cinco palabras aceptadas más cortas: 0000, 00001, 00010, 00100, 01000
+- Acepta: 0000, 00001, 00010, 00100, 01000, ... (número de ceros ≡ 4 mod 5)
+- Rechaza: ε, 0, 00, 000, 00000, 1, 01, ... (número de ceros distinto de 4 mod 5)
 
-Recordatorio: en el Módulo 1 puedes cargarlo directamente eligiendo «Cantidad de ceros múltiplo de 5» en el desplegable «Caso» y pulsando Cargar, o introducir los datos manualmente con los valores de arriba y pulsar VALIDAR Y CONSTRUIR.
+Recordatorio: en el Módulo 1 puedes cargarlo directamente eligiendo «Cantidad de ceros ≡ 4 (mod 5)» en el desplegable «Caso» y pulsando Carga, o introducir los datos manualmente con los valores de arriba y pulsar VALIDAR Y CONSTRUIR.
 
 Entradas de palabra — Módulo 3
-00000
 0000
+00001
+00000
 ε
-1111
 2
+
+Resultados del Módulo 3
+- 0000: ACEPTADA (recorrido q0 → q1 → q2 → q3 → q4)
+- 00001: ACEPTADA (recorrido q0 → q1 → q2 → q3 → q4 → q4)
+- 00000: RECHAZADA (recorrido q0 → q1 → q2 → q3 → q4 → q0)
+- ε: RECHAZADA (recorrido q0; q0 ∉ F)
+- 2: ENTRADA INVÁLIDA (símbolo '2' no pertenece a Σ, posición 1)

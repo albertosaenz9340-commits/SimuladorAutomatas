@@ -21,19 +21,19 @@ public sealed class ResultadoValidacion
 }
 
 /// <summary>
-/// Comprueba que la terna M = (Q, Σ, δ) sea un AFD completo con exactamente
-/// cinco estados en Q, y que la configuración de aceptación (q0, F) referencie
-/// estados de Q.
+/// Comprueba todas las condiciones exigidas para que una quíntupla sea un AFD
+/// completo con exactamente cinco estados en Q.
 /// </summary>
 public sealed class ValidacionAutomataService
 {
     /// <summary>Cantidad de estados (nodos) exigida en Q.</summary>
     public const int CantidadEstadosRequerida = 5;
 
-    /// <summary>Valida únicamente la terna M = (Q, Σ, δ).</summary>
-    public ResultadoValidacion ValidarDefinicion(
+    public ResultadoValidacion Validar(
         IReadOnlyList<string> estados,
         IReadOnlyList<char> alfabeto,
+        string estadoInicial,
+        IReadOnlyList<string> estadosFinales,
         IReadOnlyList<Transicion> transiciones)
     {
         var errores = new List<string>();
@@ -73,6 +73,25 @@ public sealed class ValidacionAutomataService
             }
         }
 
+        string inicial = estadoInicial?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(inicial))
+        {
+            errores.Add("Debe indicar el estado inicial q0.");
+        }
+        else if (conjuntoEstados.Count > 0 && !conjuntoEstados.Contains(inicial))
+        {
+            errores.Add($"El estado inicial '{inicial}' no pertenece a Q.");
+        }
+
+        foreach (string final in estadosFinales)
+        {
+            string nombre = final?.Trim() ?? string.Empty;
+            if (!conjuntoEstados.Contains(nombre))
+            {
+                errores.Add($"El estado final '{nombre}' no pertenece a Q.");
+            }
+        }
+
         var paresDefinidos = new HashSet<(string Estado, char Simbolo)>();
         foreach (Transicion transicion in transiciones)
         {
@@ -105,42 +124,6 @@ public sealed class ValidacionAutomataService
                 {
                     errores.Add($"Falta la transición δ({estado}, {simbolo}). La función δ debe ser completa.");
                 }
-            }
-        }
-
-        return new ResultadoValidacion(errores);
-    }
-
-    /// <summary>Valida la terna y, además, el estado inicial y los finales.</summary>
-    public ResultadoValidacion Validar(
-        IReadOnlyList<string> estados,
-        IReadOnlyList<char> alfabeto,
-        string estadoInicial,
-        IReadOnlyList<string> estadosFinales,
-        IReadOnlyList<Transicion> transiciones)
-    {
-        var errores = new List<string>(ValidarDefinicion(estados, alfabeto, transiciones).Errores);
-
-        var conjuntoEstados = new HashSet<string>(
-            estados.Where(e => !string.IsNullOrWhiteSpace(e)).Select(e => e.Trim()),
-            StringComparer.Ordinal);
-
-        string inicial = estadoInicial?.Trim() ?? string.Empty;
-        if (string.IsNullOrEmpty(inicial))
-        {
-            errores.Add("Debe indicar el estado inicial q0.");
-        }
-        else if (conjuntoEstados.Count > 0 && !conjuntoEstados.Contains(inicial))
-        {
-            errores.Add($"El estado inicial '{inicial}' no pertenece a Q.");
-        }
-
-        foreach (string final in estadosFinales)
-        {
-            string nombre = final?.Trim() ?? string.Empty;
-            if (!conjuntoEstados.Contains(nombre))
-            {
-                errores.Add($"El estado final '{nombre}' no pertenece a Q.");
             }
         }
 
