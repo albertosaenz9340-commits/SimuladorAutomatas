@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 using SimuladorAutomatas.Controls;
 using SimuladorAutomatas.Forms;
@@ -195,6 +196,328 @@ void VerificarPlaceholderDiagrama()
         $"primera tinta en x={minX}");
     Comprobar("Texto inicial del diagrama sin recorte", sinRecorteDerecho,
         $"última tinta en x={maxX} de 600");
+}
+
+// Verifica la identidad visual académica del diagrama: pentágono irregular,
+// colores, doble circunferencia final, indicador inicial saliente, curvas,
+// bucles, etiquetas sin solapes y conservación de zoom/desplazamiento.
+void VerificarEstiloGrafico()
+{
+    static bool Cerca(Color c, int r, int g, int b, int tolerancia) =>
+        Math.Abs(c.R - r) <= tolerancia &&
+        Math.Abs(c.G - g) <= tolerancia &&
+        Math.Abs(c.B - b) <= tolerancia;
+
+    static (Bitmap Mapa, IReadOnlyList<RectangleF> Etiquetas) Renderizar(
+        Automata automata, int ancho, int alto)
+    {
+        var mapa = new Bitmap(ancho, alto);
+        using var lienzo = new GrafoAutomata
+        {
+            Dock = DockStyle.None,
+            Size = new Size(ancho, alto),
+            Automata = automata
+        };
+        lienzo.DrawToBitmap(mapa, new Rectangle(0, 0, ancho, alto));
+        return (mapa, lienzo.UltimasEtiquetas);
+    }
+
+    static int Contar(Bitmap mapa, RectangleF area, int r, int g, int b, int tolerancia)
+    {
+        int x0 = Math.Max(0, (int)area.Left);
+        int y0 = Math.Max(0, (int)area.Top);
+        int x1 = Math.Min(mapa.Width, (int)Math.Ceiling(area.Right));
+        int y1 = Math.Min(mapa.Height, (int)Math.Ceiling(area.Bottom));
+        int cantidad = 0;
+        for (int y = y0; y < y1; y++)
+        {
+            for (int x = x0; x < x1; x++)
+            {
+                if (Cerca(mapa.GetPixel(x, y), r, g, b, tolerancia))
+                {
+                    cantidad++;
+                }
+            }
+        }
+        return cantidad;
+    }
+
+    Transicion T(string origen, char simbolo, string destino) => new(origen, simbolo, destino);
+    string[] q5 = { "s0", "s1", "s2", "s3", "s4" };
+
+    // Geometría y transiciones de la referencia, respetando el determinismo:
+    // several símbolos que comparten destino se agrupan en una sola arista.
+    var referencia = new Automata("Referencia", q5, new[] { 'a', 'b', 'c' }, "s0", new[] { "s4" }, new[]
+    {
+        T("s0", 'a', "s1"), T("s0", 'b', "s2"), T("s0", 'c', "s4"),
+        T("s1", 'a', "s1"), T("s1", 'b', "s0"), T("s1", 'c', "s0"),
+        T("s2", 'a', "s4"), T("s2", 'b', "s3"), T("s2", 'c', "s1"),
+        T("s3", 'a', "s4"), T("s3", 'b', "s3"), T("s3", 'c', "s0"),
+        T("s4", 'a', "s3"), T("s4", 'b', "s4"), T("s4", 'c', "s2")
+    });
+
+    var vista = Renderizar(referencia, 900, 700);
+    Bitmap mapa = vista.Mapa;
+    var posiciones = GrafoAutomata.ObtenerPosiciones(referencia, new Size(900, 700));
+
+    // 1. Diseño de cinco estados.
+    Comprobar("Diseño de cinco estados", posiciones.Count == 5,
+        $"centros calculados: {posiciones.Count}");
+
+    // 2. Pentágono irregular con las coordenadas relativas de la referencia.
+    float anchoRelativo = (posiciones["s0"].X - posiciones["s2"].X) / 0.43f;
+    float altoRelativo = (posiciones["s4"].Y - posiciones["s1"].Y) / 0.56f;
+    float[,] esperado =
+    {
+        { 0.66f, 0.43f }, { 0.45f, 0.22f }, { 0.23f, 0.43f },
+        { 0.31f, 0.78f }, { 0.58f, 0.78f }
+    };
+    bool coordenadas = true;
+    for (int i = 0; i < q5.Length; i++)
+    {
+        float xr = posiciones[q5[i]].X / anchoRelativo + 0.5f;
+        float yr = posiciones[q5[i]].Y / altoRelativo + 0.5f;
+        coordenadas &= Math.Abs(xr - esperado[i, 0]) < 0.02f &&
+                       Math.Abs(yr - esperado[i, 1]) < 0.02f;
+    }
+    Comprobar("Pentágono irregular con coordenadas relativas exactas", coordenadas);
+
+    // 3. Final con doble circunferencia (dos bandas de contorno verde oscuro).
+    PointF centroFinal = new(450f + posiciones["s4"].X * 1.6f,
+        350f + posiciones["s4"].Y * 1.6f);
+    Color rellenoFinal = mapa.GetPixel((int)centroFinal.X, (int)centroFinal.Y + 24);
+    int bandas = 0;
+    bool enBanda = false;
+    for (int radio = 34; radio <= 56; radio++)
+    {
+        Color c = mapa.GetPixel((int)(centroFinal.X + radio), (int)centroFinal.Y);
+        bool oscuro = c.G < 135 && c.B < 95;
+        if (oscuro && !enBanda)
+        {
+            bandas++;
+        }
+        enBanda = oscuro;
+    }
+    Comprobar("Estados finales con doble circunferencia",
+        bandas >= 2 && Cerca(rellenoFinal, 0x15, 0x94, 0x47, 18),
+        $"bandas={bandas}, relleno={rellenoFinal.R},{rellenoFinal.G},{rellenoFinal.B}");
+
+    // 4. Estados ordinarios azul pastel con contorno azul grisáceo.
+    PointF centroInicial = new(450f + posiciones["s0"].X * 1.6f,
+        350f + posiciones["s0"].Y * 1.6f);
+    Color rellenoNormal = mapa.GetPixel((int)centroInicial.X + 18, (int)centroInicial.Y);
+    Comprobar("Nodos normales azul pastel", Cerca(rellenoNormal, 0xDC, 0xEA, 0xF8, 14),
+        $"{rellenoNormal.R},{rellenoNormal.G},{rellenoNormal.B}");
+    Comprobar("Contorno de estados azul oscuro",
+        Contar(mapa, new RectangleF(centroInicial.X + 44, centroInicial.Y - 4, 10, 8),
+            0x34, 0x49, 0x5E, 20) > 0);
+
+    // 5. Título con tilde, centrado y sin negrita excesiva (fuente Regular).
+    int tituloMinX = int.MaxValue, tituloMaxX = -1;
+    for (int y = 0; y < 44; y++)
+    {
+        for (int x = 0; x < 900; x++)
+        {
+            Color c = mapa.GetPixel(x, y);
+            if (c.R < 120 && c.G < 120 && c.B < 120)
+            {
+                tituloMinX = Math.Min(tituloMinX, x);
+                tituloMaxX = Math.Max(tituloMaxX, x);
+            }
+        }
+    }
+    float centroTitulo = (tituloMinX + tituloMaxX) / 2f;
+    Comprobar("Título centrado y con tilde",
+        GrafoAutomata.TituloDiagrama == "Autómata finito determinista" &&
+        Math.Abs(centroTitulo - 450f) < 14f && tituloMaxX - tituloMinX > 120,
+        $"centro={centroTitulo:0} ancho={tituloMaxX - tituloMinX}");
+
+    // 6. Indicador inicial saliente hacia la derecha con etiqueta "Inicio".
+    int azulMinX = int.MaxValue, azulMaxX = -1, azulMinY = int.MaxValue, azulMaxY = -1;
+    for (int y = 0; y < 700; y++)
+    {
+        for (int x = 0; x < 900; x++)
+        {
+            if (Cerca(mapa.GetPixel(x, y), 0x15, 0x65, 0xC0, 22))
+            {
+                azulMinX = Math.Min(azulMinX, x);
+                azulMaxX = Math.Max(azulMaxX, x);
+                azulMinY = Math.Min(azulMinY, y);
+                azulMaxY = Math.Max(azulMaxY, y);
+            }
+        }
+    }
+    Comprobar("Indicador Inicio sale a la derecha con etiqueta completa",
+        azulMaxX > centroInicial.X + 60f &&
+        azulMaxX - azulMinX > 90f &&
+        azulMinY < centroInicial.Y - 8f,
+        $"x={azulMinX}..{azulMaxX}, y={azulMinY}..{azulMaxY}, nodoX={centroInicial.X:0}");
+
+    // 7. Estado inicial distinto de s0: se coloca en el flanco derecho por q0.
+    var otroInicial = new Automata("Otro", new[] { "a", "b", "c", "d", "e" },
+        new[] { '0' }, "c", new[] { "e" }, Array.Empty<Transicion>());
+    var posOtro = GrafoAutomata.ObtenerPosiciones(otroInicial, new Size(900, 700));
+    Comprobar("Estado inicial distinto de s0 se adapta",
+        posOtro["c"].X == posOtro.Values.Max(p => p.X) && posOtro.Count == 5);
+
+    // 8. Múltiples estados finales conservan relleno verde y doble circunferencia.
+    var multifinal = new Automata("Multi", q5, new[] { '0' }, "s0",
+        new[] { "s2", "s3" }, Array.Empty<Transicion>());
+    var vistaMulti = Renderizar(multifinal, 900, 700);
+    var posMulti = GrafoAutomata.ObtenerPosiciones(multifinal, new Size(900, 700));
+    bool ambosVerdes = true;
+    foreach (string final in new[] { "s2", "s3" })
+    {
+        var centro = new PointF(450f + posMulti[final].X * 1.6f,
+            350f + posMulti[final].Y * 1.6f);
+        ambosVerdes &= Cerca(vistaMulti.Mapa.GetPixel((int)centro.X, (int)centro.Y + 24),
+            0x15, 0x94, 0x47, 18);
+    }
+    Comprobar("Múltiples estados finales destacados", ambosVerdes);
+    vistaMulti.Mapa.Dispose();
+
+    // 9. Bucles exteriores: arco sobre el nodo superior y bajo los inferiores.
+    PointF centroSuperior = new(450f + posiciones["s1"].X * 1.6f,
+        350f + posiciones["s1"].Y * 1.6f);
+    Color colorTrazo = Color.FromArgb(0x26, 0x37, 0x47);
+    int bucleArriba = Contar(mapa, new RectangleF(
+        centroSuperior.X - 44, centroSuperior.Y - 104, 88, 46),
+        colorTrazo.R, colorTrazo.G, colorTrazo.B, 16);
+    bool buclesAbajo = true;
+    foreach (string estado in new[] { "s3", "s4" })
+    {
+        var centro = new PointF(450f + posiciones[estado].X * 1.6f,
+            350f + posiciones[estado].Y * 1.6f);
+        buclesAbajo &= Contar(mapa, new RectangleF(
+            centro.X - 44, centro.Y + 56, 88, 46),
+            colorTrazo.R, colorTrazo.G, colorTrazo.B, 16) > 15;
+    }
+    Comprobar("Bucles superiores e inferiores", bucleArriba > 15 && buclesAbajo,
+        $"superior={bucleArriba}");
+
+    // 10. Transiciones curvas y diagonales: trazos en el interior del pentágono.
+    int trazosInteriores = Contar(mapa, new RectangleF(320, 210, 330, 210),
+        colorTrazo.R, colorTrazo.G, colorTrazo.B, 16);
+    Comprobar("Transiciones curvas y diagonales en el interior", trazosInteriores > 60,
+        $"píxeles de trazo={trazosInteriores}");
+
+    // 11. Sentidos opuestos: dos aristas y dos etiquetas separadas.
+    var bidireccional = new Automata("Bidireccional", new[] { "a", "b" }, new[] { '0', '1' },
+        "a", new[] { "b" }, new[] { T("a", '0', "b"), T("b", '0', "a") });
+    var vistaBi = Renderizar(bidireccional, 900, 700);
+    Comprobar("Transiciones bidireccionales con arcos separados",
+        vistaBi.Etiquetas.Count == 2 &&
+        bidireccional.ObtenerDestino("a", '0') == "b" &&
+        bidireccional.ObtenerDestino("b", '0') == "a");
+    vistaBi.Mapa.Dispose();
+
+    // 12. Varios símbolos con el mismo origen y destino: una etiqueta agrupada.
+    Comprobar("Etiquetas agrupadas por origen-destino",
+        referencia.ObtenerDestino("s1", 'b') == "s0" &&
+        referencia.ObtenerDestino("s1", 'c') == "s0" &&
+        vista.Etiquetas.Count == 14,
+        $"etiquetas={vista.Etiquetas.Count}");
+
+    // 13. Las etiquetas no se superponen entre sí.
+    bool sinSolapes = true;
+    for (int i = 0; i < vista.Etiquetas.Count && sinSolapes; i++)
+    {
+        for (int j = i + 1; j < vista.Etiquetas.Count; j++)
+        {
+            if (RectangleF.Inflate(vista.Etiquetas[i], 1f, 1f)
+                .IntersectsWith(vista.Etiquetas[j]))
+            {
+                sinSolapes = false;
+                break;
+            }
+        }
+    }
+    Comprobar("Prevención de superposición de etiquetas", sinSolapes);
+
+    // 14. Redimensionamiento sin deformar la distribución relativa.
+    var posPequenas = GrafoAutomata.ObtenerPosiciones(referencia, new Size(600, 420));
+    var posGrandes = GrafoAutomata.ObtenerPosiciones(referencia, new Size(1100, 760));
+    bool estable = posPequenas.Count == 5 && posGrandes.Count == 5;
+    foreach (string estado in q5)
+    {
+        float xrP = posPequenas[estado].X /
+            (posPequenas["s0"].X - posPequenas["s2"].X) * 0.43f + 0.5f;
+        float xrG = posGrandes[estado].X /
+            (posGrandes["s0"].X - posGrandes["s2"].X) * 0.43f + 0.5f;
+        estable &= Math.Abs(xrP - xrG) < 0.02f;
+    }
+    Comprobar("Distribución estable al redimensionar", estable);
+
+    // 15 y 16. Zoom uniforme y desplazamiento conservados.
+    using var lienzoInteraccion = new GrafoAutomata
+    {
+        Dock = DockStyle.None,
+        Size = new Size(600, 400)
+    };
+    MethodInfo cambiarZoom = typeof(GrafoAutomata)
+        .GetMethod("CambiarEscala", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    float escalaInicial = lienzoInteraccion.Escala;
+    cambiarZoom.Invoke(lienzoInteraccion,
+        new object?[] { lienzoInteraccion, new MouseEventArgs(MouseButtons.None, 1, 0, 0, 120) });
+    bool zoomSube = lienzoInteraccion.Escala > escalaInicial;
+    cambiarZoom.Invoke(lienzoInteraccion,
+        new object?[] { lienzoInteraccion, new MouseEventArgs(MouseButtons.None, 1, 0, 0, -120) });
+    lienzoInteraccion.RestablecerVista();
+    Comprobar("Zoom uniforme y Restablecer vista",
+        zoomSube && Math.Abs(lienzoInteraccion.Escala - 1.6f) < 0.001f);
+
+    int eventosVista = 0;
+    lienzoInteraccion.VistaCambiada += (_, _) => eventosVista++;
+    typeof(GrafoAutomata).GetMethod("IniciarArrastre", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(lienzoInteraccion, new object?[]
+        {
+            lienzoInteraccion, new MouseEventArgs(MouseButtons.Left, 1, 100, 100, 0)
+        });
+    typeof(GrafoAutomata).GetMethod("Arrastrar", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(lienzoInteraccion, new object?[]
+        {
+            lienzoInteraccion, new MouseEventArgs(MouseButtons.Left, 1, 130, 115, 0)
+        });
+    typeof(GrafoAutomata).GetMethod("TerminarArrastre", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(lienzoInteraccion, new object?[] { lienzoInteraccion, EventArgs.Empty });
+    Comprobar("Desplazamiento con el ratón", eventosVista >= 1,
+        $"eventos={eventosVista}");
+
+    // 17. Actualización en caliente del autómata dibujado.
+    using (var lienzoActualizacion = new GrafoAutomata
+           { Dock = DockStyle.None, Size = new Size(900, 700) })
+    using (var temporal = new Bitmap(900, 700))
+    {
+        lienzoActualizacion.Automata = referencia;
+        lienzoActualizacion.DrawToBitmap(temporal, new Rectangle(0, 0, 900, 700));
+        int etiquetasConAutoma = lienzoActualizacion.UltimasEtiquetas.Count;
+        lienzoActualizacion.Automata = multifinal;
+        lienzoActualizacion.DrawToBitmap(temporal, new Rectangle(0, 0, 900, 700));
+        Comprobar("Actualización del autómata en el lienzo",
+            etiquetasConAutoma == 14 && lienzoActualizacion.UltimasEtiquetas.Count == 0);
+    }
+
+    // 18. Lenguaje vacío: no aparece ningún trazo ni etiqueta de transición.
+    var vacio = new Automata("Vacio", q5, Array.Empty<char>(), "s0",
+        new[] { "s4" }, Array.Empty<Transicion>());
+    var vistaVacia = Renderizar(vacio, 900, 700);
+    int trazosVacios = Contar(vistaVacia.Mapa, new RectangleF(0, 0, 900, 700),
+        colorTrazo.R, colorTrazo.G, colorTrazo.B, 8);
+    Comprobar("Lenguaje vacío sin transiciones",
+        vistaVacia.Etiquetas.Count == 0 && trazosVacios == 0,
+        $"trazos={trazosVacios}");
+    vistaVacia.Mapa.Dispose();
+
+    // 19. El motor no inventa transiciones ausentes en δ.
+    var dosEstados = new Automata("Dos", new[] { "a", "b" }, new[] { '0' },
+        "a", new[] { "b" }, new[] { T("a", '0', "b") });
+    var vistaDos = Renderizar(dosEstados, 900, 700);
+    Comprobar("Ausencia de transiciones ficticias",
+        !dosEstados.IntentarTransitar("b", '0', out _) && vistaDos.Etiquetas.Count == 1,
+        $"etiquetas={vistaDos.Etiquetas.Count}");
+    vistaDos.Mapa.Dispose();
+
+    mapa.Dispose();
 }
 
 // Comprueba que el texto escrito en el cuadro de entrada del Módulo 3 se ve
@@ -423,6 +746,9 @@ try
     using var grafo = new GrafoAutomata { Automata = a2, Size = new Size(500, 360) };
     grafo.DrawToBitmap(mapa, new Rectangle(0, 0, 500, 360));
     Comprobar("Diagrama GDI+ dibujado sin excepciones", mapa.Width == 500 && mapa.Height == 360);
+
+    Console.WriteLine("=== IDENTIDAD VISUAL DEL DIAGRAMA ===");
+    VerificarEstiloGrafico();
 
     Console.WriteLine("=== AUDITORÍA DE TEXTOS ===");
     servicio.Establecer(a1);

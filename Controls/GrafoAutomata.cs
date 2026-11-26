@@ -9,37 +9,51 @@ using SimuladorAutomatas.Models;
 namespace SimuladorAutomatas.Controls;
 
 /// <summary>
-/// Control personalizado que dibuja el AFD con GDI+: círculos en un anillo
-/// amplio, bordes azul marino, final verde sólido, indicador "Inicio" con texto
-/// medido dinámicamente, arcos Bézier, bucles exteriores y etiquetas en texto
-/// plano colocadas sin colisiones. Permite desplazar y ampliar el dibujo.
+/// Motor GDI+ del diagrama del AFD: título centrado, pentágono irregular de
+/// cinco estados con relleno azul pastel, finales verdes con doble
+/// circunferencia, indicador inicial saliente con etiqueta "Inicio", aristas
+/// Bézier, bucles exteriores y etiquetas de texto plano sin superposiciones.
+/// La definición matemática se lee siempre de la quíntupla M = (Q, Σ, δ, q0, F).
 /// </summary>
 public sealed class GrafoAutomata : Panel
 {
+    public const string TituloDiagrama = "Autómata finito determinista";
+
     private const float RadioEstado = 30f;
-    private const float SeparacionBucle = 24f;
-    private const float LongitudCabeza = 13f;
-    private const float LongitudCabezaInicial = 14f;
-    private const float CentroY = 10f;
+    private const float SeparacionBucle = 22f;
+    private const float LongitudCabeza = 12f;
+    private const float LongitudCabezaInicial = 13f;
     private const float MargenLienzo = 14f;
+    private const float MargenSuperior = 34f;
+    private const float MargenInferior = 34f;
 
-    private const float LongitudFlechaInicial = 32f;
-    private const float PaddingBotonInicial = 28f;
-    private const float AnchoMinimoBotonInicial = 70f;
-    private const float AltoMinimoBotonInicial = 28f;
+    private const float SeparacionInicial = 10f;
+    private const float LongitudFlechaInicial = 46f;
+    private const float PaddingBotonInicial = 22f;
+    private const float AnchoMinimoBotonInicial = 64f;
+    private const float AltoMinimoBotonInicial = 24f;
+    private const float SeparacionVerticalBoton = 8f;
 
-    private static readonly Color ColorNodo = Color.FromArgb(0x1B, 0x4F, 0x72);
+    // Huecos del pentágono irregular: superior, medio izquierdo, medio derecho,
+    // inferior izquierdo e inferior derecho (ver tabla de coordenadas relativas).
+    private static readonly float[] CoordenadasX = { 0.45f, 0.23f, 0.66f, 0.31f, 0.58f };
+    private static readonly float[] CoordenadasY = { 0.22f, 0.43f, 0.43f, 0.78f, 0.78f };
+
+    private static readonly Color ColorRellenoEstado = Color.FromArgb(0xDC, 0xEA, 0xF8);
+    private static readonly Color ColorContornoEstado = Color.FromArgb(0x34, 0x49, 0x5E);
+    private static readonly Color ColorTextoEstado = Color.FromArgb(0x17, 0x2B, 0x43);
+    private static readonly Color ColorTransicion = Color.FromArgb(0x26, 0x37, 0x47);
+    private static readonly Color ColorRellenoFinal = Color.FromArgb(0x15, 0x94, 0x47);
+    private static readonly Color ColorContornoFinal = Color.FromArgb(0x08, 0x78, 0x3C);
     private static readonly Color ColorInicial = Color.FromArgb(0x15, 0x65, 0xC0);
-    private static readonly Color ColorFinal = Color.FromArgb(0x14, 0x6C, 0x32);
-    private static readonly Color ColorTexto = Color.FromArgb(0x11, 0x18, 0x27);
-    private static readonly Color ColorTitulo = Color.FromArgb(0x1E, 0x24, 0x2B);
 
-    private readonly Pen _penEstados = new(ColorNodo, 2.8f);
-    private readonly Pen _penFinal = new(ColorFinal, 2.8f);
-    private readonly Pen _penTransiciones = new(ColorNodo, 2f);
-    private readonly Pen _penInicial = new(ColorNodo, 2.2f);
-    private readonly Brush _rellenoEstado = new SolidBrush(Color.White);
-    private readonly Brush _rellenoFinal = new SolidBrush(ColorFinal);
+    private readonly Pen _penEstados = new(ColorContornoEstado, 2.2f);
+    private readonly Pen _penFinalExterior = new(ColorContornoFinal, 2.4f);
+    private readonly Pen _penFinalInterior = new(ColorContornoFinal, 1.4f);
+    private readonly Pen _penTransiciones = new(ColorTransicion, 1.8f);
+    private readonly Pen _penInicial = new(ColorInicial, 2.6f);
+    private readonly Brush _rellenoEstado = new SolidBrush(ColorRellenoEstado);
+    private readonly Brush _rellenoFinal = new SolidBrush(ColorRellenoFinal);
     private readonly Brush _rellenoBotonInicial = new SolidBrush(ColorInicial);
 
     private Automata? _automata;
@@ -49,6 +63,9 @@ public sealed class GrafoAutomata : Panel
     private Point _ultimoPunto;
 
     public event EventHandler? VistaCambiada;
+
+    /// <summary>Rectángulos ocupados por las etiquetas en el último dibujo.</summary>
+    public IReadOnlyList<RectangleF> UltimasEtiquetas { get; private set; } = Array.Empty<RectangleF>();
 
     public Automata? Automata
     {
@@ -85,12 +102,33 @@ public sealed class GrafoAutomata : Panel
         VistaCambiada?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Expone el cálculo de posiciones para pruebas y depuración. Los centros se
+    /// devuelven en coordenadas del grafo, antes de aplicar zoom y desplazamiento.
+    /// </summary>
+    public static IReadOnlyDictionary<string, PointF> ObtenerPosiciones(
+        Automata automata, Size tamaño, float escala = 1.6f)
+    {
+        ArgumentNullException.ThrowIfNull(automata);
+
+        using var mapa = new Bitmap(1, 1);
+        using var graphics = Graphics.FromImage(mapa);
+        using var fuente = new Font("Segoe UI", 10f, FontStyle.Bold);
+        SizeF medida = graphics.MeasureString("Inicio", fuente);
+        float ancho = Math.Max(AnchoMinimoBotonInicial, medida.Width + PaddingBotonInicial);
+        float alto = Math.Max(AltoMinimoBotonInicial, medida.Height + 10f);
+
+        return CalcularDiseno(automata, ancho, alto, tamaño,
+            Math.Clamp(escala, 0.5f, 2.5f)).Posiciones;
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             _penEstados.Dispose();
-            _penFinal.Dispose();
+            _penFinalExterior.Dispose();
+            _penFinalInterior.Dispose();
             _penTransiciones.Dispose();
             _penInicial.Dispose();
             _rellenoEstado.Dispose();
@@ -141,7 +179,7 @@ public sealed class GrafoAutomata : Panel
     private void CambiarEscala(object? sender, MouseEventArgs e)
     {
         float nuevo = _escala + (e.Delta > 0 ? 0.1f : -0.1f);
-        _escala = Math.Max(0.5f, Math.Min(2.5f, nuevo));
+        _escala = Math.Clamp(nuevo, 0.5f, 2.5f);
         Invalidate();
         VistaCambiada?.Invoke(this, EventArgs.Empty);
     }
@@ -153,103 +191,195 @@ public sealed class GrafoAutomata : Panel
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
+        DibujarTitulo(g);
+        UltimasEtiquetas = Array.Empty<RectangleF>();
+
         if (_automata is null || _automata.Estados.Count == 0)
         {
-            using var fuente = new Font("Segoe UI", 10f);
-            using var brocha = new SolidBrush(Color.FromArgb(120, 132, 148));
-            using var formato = new StringFormat
-            {
-                Alignment = StringAlignment.Near,
-                LineAlignment = StringAlignment.Near,
-                Trimming = StringTrimming.Word
-            };
-            const string texto = "Construya un autómata para visualizar su diagrama.";
-            var area = new RectangleF(MargenLienzo, MargenLienzo,
-                Math.Max(0, ClientSize.Width - MargenLienzo * 2),
-                Math.Max(0, ClientSize.Height - MargenLienzo * 2));
-            g.DrawString(texto, fuente, brocha, area, formato);
+            DibujarMensajeVacio(g);
             return;
         }
 
-        using (var fuenteTitulo = new Font("Segoe UI", 13f, FontStyle.Bold))
-        using (var brochaTitulo = new SolidBrush(ColorTitulo))
-        {
-            g.DrawString("Automata finito determinista", fuenteTitulo, brochaTitulo, 14f, 10f);
-        }
+        // Se mide antes de aplicar la transformación: el ancho del rectángulo
+        // "Inicio" se deriva siempre del texto, nunca de un valor fijo.
+        using var fuenteBoton = new Font("Segoe UI", 10f, FontStyle.Bold);
+        SizeF medida = g.MeasureString("Inicio", fuenteBoton);
+        float anchoBoton = Math.Max(AnchoMinimoBotonInicial, medida.Width + PaddingBotonInicial);
+        float altoBoton = Math.Max(AltoMinimoBotonInicial, medida.Height + 10f);
 
-        // El botón se mide antes de aplicar la transformación para que el texto
-        // "Inicio" nunca se recorte, y su extensión se compensa al centrar.
-        using var fuenteBoton = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-        SizeF medidaBoton = g.MeasureString("Inicio", fuenteBoton);
-        float anchoBoton = Math.Max(AnchoMinimoBotonInicial, medidaBoton.Width + PaddingBotonInicial);
-        float altoBoton = Math.Max(AltoMinimoBotonInicial, medidaBoton.Height + 12f);
+        Diseno diseno = CalcularDiseno(_automata, anchoBoton, altoBoton, ClientSize, _escala);
 
-        Dictionary<string, PointF> posiciones = CalcularPosiciones(_automata, anchoBoton);
-        float compensacionX = (LongitudFlechaInicial + anchoBoton) / 2f;
-
-        g.TranslateTransform(ClientSize.Width / 2f - compensacionX * _escala + _desplazamiento.X,
-                             ClientSize.Height / 2f + CentroY + _desplazamiento.Y);
+        g.TranslateTransform(
+            ClientSize.Width / 2f - diseno.CompensacionX * _escala + _desplazamiento.X,
+            ClientSize.Height / 2f - diseno.CompensacionY * _escala + _desplazamiento.Y);
         g.ScaleTransform(_escala, _escala);
 
-        RectangleF? botonInicial = null;
-        if (posiciones.TryGetValue(_automata.EstadoInicial, out PointF posicionInicial))
+        var etiquetas = new List<RectangleF>();
+        DibujarTransiciones(g, _automata, diseno, etiquetas);
+        DibujarEstados(g, _automata, diseno, fuenteBoton);
+        UltimasEtiquetas = etiquetas;
+    }
+
+    private void DibujarTitulo(Graphics g)
+    {
+        using var fuente = new Font("Segoe UI", 15f, FontStyle.Regular);
+        using var brocha = new SolidBrush(Color.Black);
+        using var formato = new StringFormat
         {
-            botonInicial = new RectangleF(
-                posicionInicial.X + RadioEstado + LongitudFlechaInicial,
-                posicionInicial.Y - altoBoton / 2f,
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center
+        };
+        g.DrawString(TituloDiagrama, fuente, brocha,
+            new RectangleF(0f, 6f, ClientSize.Width, 32f), formato);
+    }
+
+    private void DibujarMensajeVacio(Graphics g)
+    {
+        using var fuente = new Font("Segoe UI", 10f);
+        using var brocha = new SolidBrush(Color.FromArgb(120, 132, 148));
+        using var formato = new StringFormat
+        {
+            Alignment = StringAlignment.Near,
+            LineAlignment = StringAlignment.Near,
+            Trimming = StringTrimming.Word
+        };
+        g.DrawString("Construya un autómata para visualizar su diagrama.", fuente, brocha,
+            new RectangleF(MargenLienzo, MargenLienzo,
+                Math.Max(0, ClientSize.Width - MargenLienzo * 2),
+                Math.Max(0, ClientSize.Height - MargenLienzo * 2)), formato);
+    }
+
+    private static Diseno CalcularDiseno(
+        Automata automata, float anchoBoton, float altoBoton, Size tamaño, float escala)
+    {
+        var diseno = new Diseno();
+        int cantidad = automata.Estados.Count;
+        if (cantidad == 0)
+        {
+            return diseno;
+        }
+
+        float mitadAncho = Math.Max(40f, (tamaño.Width / 2f - MargenLienzo) / escala);
+        float mitadAlto = Math.Max(40f,
+            (tamaño.Height / 2f - MargenSuperior - MargenInferior) / escala);
+        float anchoArea = mitadAncho * 2f;
+        float altoArea = mitadAlto * 2f;
+
+        PointF Punto(int hueco) => new(
+            (CoordenadasX[hueco] - 0.5f) * anchoArea,
+            (CoordenadasY[hueco] - 0.5f) * altoArea);
+
+        if (cantidad == 5)
+        {
+            // Asignación por papel, nunca por nombre: q0 ocupa el flanco derecho
+            // y el único estado final el inferior derecho, como en la referencia.
+            var ocupados = new bool[5];
+            int indiceInicial = automata.EsEstadoConocido(automata.EstadoInicial)
+                ? automata.ObtenerIndice(automata.EstadoInicial)
+                : -1;
+            if (indiceInicial >= 0)
+            {
+                string estadoInicial = automata.Estados[indiceInicial];
+                diseno.Slots[estadoInicial] = 2;
+                diseno.Posiciones[estadoInicial] = Punto(2);
+                ocupados[2] = true;
+            }
+
+            if (automata.EstadosFinales.Count == 1 &&
+                automata.EsEstadoConocido(automata.EstadosFinales[0]) &&
+                !diseno.Posiciones.ContainsKey(automata.EstadosFinales[0]))
+            {
+                string final = automata.EstadosFinales[0];
+                diseno.Slots[final] = 4;
+                diseno.Posiciones[final] = Punto(4);
+                ocupados[4] = true;
+            }
+
+            int hueco = 0;
+            foreach (string estado in automata.Estados)
+            {
+                if (diseno.Posiciones.ContainsKey(estado))
+                {
+                    continue;
+                }
+
+                while (hueco < 5 && ocupados[hueco])
+                {
+                    hueco++;
+                }
+
+                if (hueco >= 5)
+                {
+                    break;
+                }
+
+                diseno.Slots[estado] = hueco;
+                diseno.Posiciones[estado] = Punto(hueco);
+                ocupados[hueco] = true;
+            }
+        }
+        else
+        {
+            // Distribución alternativa determinista: el estado inicial arranca
+            // a la derecha y el resto se reparte por igual en una elipse.
+            int indiceInicial = automata.EsEstadoConocido(automata.EstadoInicial)
+                ? automata.ObtenerIndice(automata.EstadoInicial)
+                : 0;
+            for (int i = 0; i < cantidad; i++)
+            {
+                string estado = automata.Estados[i];
+                double angulo = -2d * Math.PI * (i - indiceInicial) / cantidad;
+                diseno.Posiciones[estado] = new PointF(
+                    (float)(Math.Cos(angulo) * anchoArea * 0.41d),
+                    (float)(Math.Sin(angulo) * altoArea * 0.40d));
+            }
+        }
+
+        if (diseno.Posiciones.TryGetValue(automata.EstadoInicial, out PointF centroInicial))
+        {
+            PointF inicioFlecha = new(centroInicial.X + RadioEstado + SeparacionInicial, centroInicial.Y);
+            PointF finFlecha = new(inicioFlecha.X + LongitudFlechaInicial, centroInicial.Y);
+            diseno.InicioFlecha = inicioFlecha;
+            diseno.FinFlecha = finFlecha;
+            diseno.BotonInicial = new RectangleF(
+                (inicioFlecha.X + finFlecha.X) / 2f - anchoBoton / 2f,
+                centroInicial.Y - SeparacionVerticalBoton - altoBoton,
                 anchoBoton,
                 altoBoton);
+            diseno.CorredorFlechaInicial = new RectangleF(
+                inicioFlecha.X, centroInicial.Y - 4f,
+                finFlecha.X - inicioFlecha.X + LongitudCabezaInicial, 8f);
+
+            float necesario = RadioEstado + SeparacionInicial +
+                LongitudFlechaInicial / 2f + anchoBoton / 2f + 8f;
+            float disponible = mitadAncho - centroInicial.X;
+            diseno.CompensacionX = Math.Max(0f, necesario - disponible);
         }
 
-        var etiquetas = new List<RectangleF>();
-        DibujarTransiciones(g, _automata, posiciones, botonInicial, etiquetas);
-        DibujarEstados(g, _automata, posiciones, botonInicial, fuenteBoton);
+        float yMin = diseno.Posiciones.Values.Min(p => p.Y);
+        float yMax = diseno.Posiciones.Values.Max(p => p.Y);
+        float necesarioVertical = RadioEstado + SeparacionBucle + 14f;
+        float faltaArriba = Math.Max(0f, necesarioVertical - (mitadAlto + yMin));
+        float faltaAbajo = Math.Max(0f, necesarioVertical - (mitadAlto - yMax));
+        diseno.CompensacionY = Math.Max(faltaArriba, faltaAbajo);
+
+        return diseno;
     }
 
-    private Dictionary<string, PointF> CalcularPosiciones(Automata automata, float anchoBoton)
+    private sealed class Diseno
     {
-        var posiciones = new Dictionary<string, PointF>(StringComparer.Ordinal);
-        int cantidad = automata.Estados.Count;
-        if (cantidad == 1)
-        {
-            posiciones[automata.Estados[0]] = PointF.Empty;
-            return posiciones;
-        }
-
-        float radio = CalcularRadio(cantidad, anchoBoton);
-        double[]? angulosPersonalizados = cantidad == 5
-            ? new[] { 0d, -78d, -162d, -234d, -306d }
-            : null;
-
-        for (int i = 0; i < cantidad; i++)
-        {
-            double angulo = angulosPersonalizados is null
-                ? -2 * Math.PI * i / cantidad
-                : angulosPersonalizados[i] * Math.PI / 180d;
-            float x = (float)(radio * Math.Cos(angulo));
-            float y = (float)(radio * Math.Sin(angulo));
-            posiciones[automata.Estados[i]] = new PointF(x, y);
-        }
-
-        return posiciones;
-    }
-
-    private float CalcularRadio(int cantidad, float anchoBoton)
-    {
-        float deseado = Math.Max(72f, Math.Min(cantidad * 22f, 110f));
-        float mitadAncho = (ClientSize.Width / 2f - MargenLienzo) / _escala;
-        float maxPorAncho = mitadAncho - RadioEstado - (LongitudFlechaInicial + anchoBoton) / 2f;
-        float mitadAlto = (ClientSize.Height / 2f - MargenLienzo - CentroY) / _escala;
-        float maxPorAlto = (mitadAlto - (RadioEstado + SeparacionBucle + 10f)) / 0.98f;
-        return Math.Max(62f, Math.Min(deseado, Math.Min(maxPorAncho, maxPorAlto)));
+        public Dictionary<string, PointF> Posiciones { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, int> Slots { get; } = new(StringComparer.Ordinal);
+        public RectangleF BotonInicial { get; set; }
+        public RectangleF CorredorFlechaInicial { get; set; }
+        public PointF InicioFlecha { get; set; }
+        public PointF FinFlecha { get; set; }
+        public float CompensacionX { get; set; }
+        public float CompensacionY { get; set; }
     }
 
     private void DibujarTransiciones(
-        Graphics g,
-        Automata automata,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
-        List<RectangleF> etiquetas)
+        Graphics g, Automata automata, Diseno diseno, List<RectangleF> etiquetas)
     {
         var dibujadas = new HashSet<(string Origen, string Destino)>();
 
@@ -267,37 +397,31 @@ public sealed class GrafoAutomata : Panel
                 }
 
                 string etiqueta = string.Join(", ", simbolos);
-                PointF puntoOrigen = posiciones[origen];
-                PointF puntoDestino = posiciones[destino];
-
                 if (string.Equals(origen, destino, StringComparison.Ordinal))
                 {
-                    bool esInicial = string.Equals(origen, automata.EstadoInicial, StringComparison.Ordinal);
-                    DibujarBucle(g, puntoOrigen, etiqueta, esInicial, posiciones, botonInicial, etiquetas);
+                    DibujarBucle(g, diseno, origen, etiqueta, etiquetas);
                 }
                 else
                 {
-                    bool reciprocada = automata.Alfabeto.Any(s => automata.ObtenerDestino(destino, s) == origen);
-                    float signo = reciprocada && string.CompareOrdinal(origen, destino) > 0 ? -1f : 1f;
-                    DibujarArco(g, puntoOrigen, puntoDestino, etiqueta, signo,
-                        posiciones, botonInicial, etiquetas);
+                    DibujarCurva(g, automata, diseno, origen, destino, etiqueta, etiquetas);
                 }
             }
         }
     }
 
-    private void DibujarArco(
+    private void DibujarCurva(
         Graphics g,
-        PointF origen,
-        PointF destino,
+        Automata automata,
+        Diseno diseno,
+        string origen,
+        string destino,
         string etiqueta,
-        float signo,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
         List<RectangleF> etiquetas)
     {
-        float dx = destino.X - origen.X;
-        float dy = destino.Y - origen.Y;
+        PointF origenPunto = diseno.Posiciones[origen];
+        PointF destinoPunto = diseno.Posiciones[destino];
+        float dx = destinoPunto.X - origenPunto.X;
+        float dy = destinoPunto.Y - origenPunto.Y;
         float longitud = (float)Math.Sqrt(dx * dx + dy * dy);
         if (longitud < 1f)
         {
@@ -306,75 +430,151 @@ public sealed class GrafoAutomata : Panel
 
         float ux = dx / longitud;
         float uy = dy / longitud;
-        float px = -uy;
-        float py = ux;
+        PointF normal = new(-uy, ux);
 
-        PointF inicio = new(origen.X + ux * (RadioEstado + 1f), origen.Y + uy * (RadioEstado + 1f));
-        PointF fin = new(destino.X - ux * (RadioEstado + 2f), destino.Y - uy * (RadioEstado + 2f));
+        PointF inicio = new(origenPunto.X + ux * (RadioEstado + 1f),
+            origenPunto.Y + uy * (RadioEstado + 1f));
+        PointF fin = new(destinoPunto.X - ux * (RadioEstado + 2f),
+            destinoPunto.Y - uy * (RadioEstado + 2f));
 
-        float curva = Math.Min(90f, Math.Max(38f, longitud * 0.3f)) * signo;
-        PointF control1 = new(inicio.X + dx / 3f + px * curva, inicio.Y + dy / 3f + py * curva);
-        PointF control2 = new(inicio.X + 2f * dx / 3f + px * curva, inicio.Y + 2f * dy / 3f + py * curva);
+        bool reciprocada = automata.Alfabeto
+            .Any(s => automata.ObtenerDestino(destino, s) == origen);
+        float magnitud = Math.Clamp(longitud * 0.24f, 28f, 76f);
+        if (reciprocada)
+        {
+            magnitud *= 1.2f;
+        }
+
+        var (controlPos, control2Pos) = Controles(inicio, fin, dx, dy, normal, magnitud);
+        var (controlNeg, control2Neg) = Controles(inicio, fin, dx, dy, normal, -magnitud);
+
+        float signo;
+        if (reciprocada)
+        {
+            signo = string.CompareOrdinal(origen, destino) > 0 ? -1f : 1f;
+        }
+        else
+        {
+            float despejePos = Despeje(inicio, controlPos, control2Pos, fin, diseno, origen, destino);
+            float despejeNeg = Despeje(inicio, controlNeg, control2Neg, fin, diseno, origen, destino);
+            signo = despejePos >= despejeNeg ? 1f : -1f;
+        }
+
+        (PointF control1, PointF control2) = signo > 0
+            ? (controlPos, control2Pos)
+            : (controlNeg, control2Neg);
 
         g.DrawBezier(_penTransiciones, inicio, control1, control2, fin);
-        DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y), ColorNodo);
+        DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y),
+            ColorTransicion, LongitudCabeza);
 
-        CalcularMitad(out float mx, out float my, control1, control2);
-        DibujarEtiquetaSegura(g, etiqueta, new PointF(mx, my),
-            new PointF(px * signo, py * signo), new PointF(ux, uy),
-            posiciones, botonInicial, etiquetas);
+        PointF mitad = PuntoBezier(inicio, control1, control2, fin, 0.5f);
+        DibujarEtiquetaSegura(g, etiqueta, mitad,
+            new PointF(normal.X * signo, normal.Y * signo),
+            new PointF(ux, uy), diseno, etiquetas);
+    }
+
+    private static (PointF Control1, PointF Control2) Controles(
+        PointF inicio, PointF fin, float dx, float dy, PointF normal, float curva)
+    {
+        return (
+            new PointF(inicio.X + dx / 3f + normal.X * curva,
+                       inicio.Y + dy / 3f + normal.Y * curva),
+            new PointF(inicio.X + 2f * dx / 3f + normal.X * curva,
+                       inicio.Y + 2f * dy / 3f + normal.Y * curva));
+    }
+
+    private static float Despeje(
+        PointF inicio, PointF control1, PointF control2, PointF fin,
+        Diseno diseno, string origen, string destino)
+    {
+        float despeje = float.MaxValue;
+        for (int i = 1; i < 8; i++)
+        {
+            PointF punto = PuntoBezier(inicio, control1, control2, fin, i / 8f);
+            foreach ((string estado, PointF centro) in diseno.Posiciones)
+            {
+                if (estado == origen || estado == destino)
+                {
+                    continue;
+                }
+
+                float distancia = Distancia(punto, centro) - RadioEstado;
+                despeje = Math.Min(despeje, distancia);
+            }
+        }
+
+        return despeje;
+    }
+
+    private static PointF PuntoBezier(
+        PointF a, PointF b, PointF c, PointF d, float t)
+    {
+        float u = 1f - t;
+        return new PointF(
+            u * u * u * a.X + 3f * u * u * t * b.X + 3f * u * t * t * c.X + t * t * t * d.X,
+            u * u * u * a.Y + 3f * u * u * t * b.Y + 3f * u * t * t * c.Y + t * t * t * d.Y);
+    }
+
+    private static float Distancia(PointF a, PointF b)
+    {
+        float dx = a.X - b.X;
+        float dy = a.Y - b.Y;
+        return (float)Math.Sqrt(dx * dx + dy * dy);
     }
 
     private void DibujarBucle(
-        Graphics g,
-        PointF centro,
-        string etiqueta,
-        bool esInicial,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
-        List<RectangleF> etiquetas)
+        Graphics g, Diseno diseno, string estado, string etiqueta, List<RectangleF> etiquetas)
     {
-        float rotacion = AnguloBucle(centro, esInicial);
+        PointF centro = diseno.Posiciones[estado];
+        (float angulo, bool haciaAbajo) = OrientacionBucle(diseno, estado, centro);
 
-        PointF inicio = Sumar(Rotar(new PointF(22f, -22f), rotacion), centro);
-        PointF fin = Sumar(Rotar(new PointF(-22f, -22f), rotacion), centro);
-        PointF control1 = Sumar(Rotar(new PointF(40f, -(RadioEstado + SeparacionBucle)), rotacion), centro);
-        PointF control2 = Sumar(Rotar(new PointF(-40f, -(RadioEstado + SeparacionBucle)), rotacion), centro);
+        float signoY = haciaAbajo ? 1f : -1f;
+        float altura = RadioEstado + SeparacionBucle;
+
+        PointF inicio = Sumar(Rotar(new PointF(-22f, 22f * signoY), angulo), centro);
+        PointF fin = Sumar(Rotar(new PointF(22f, 22f * signoY), angulo), centro);
+        PointF control1 = Sumar(Rotar(new PointF(-40f, altura * signoY), angulo), centro);
+        PointF control2 = Sumar(Rotar(new PointF(40f, altura * signoY), angulo), centro);
 
         g.DrawBezier(_penTransiciones, inicio, control1, control2, fin);
-        DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y), ColorNodo);
+        DibujarCabeza(g, fin, new PointF(fin.X - control2.X, fin.Y - control2.Y),
+            ColorTransicion, LongitudCabeza);
 
-        CalcularMitad(out float mx, out float my, control1, control2);
-        DibujarEtiquetaSegura(g, etiqueta, new PointF(mx, my),
-            Rotar(new PointF(0f, -1f), rotacion), Rotar(new PointF(1f, 0f), rotacion),
-            posiciones, botonInicial, etiquetas);
+        PointF mitad = PuntoBezier(inicio, control1, control2, fin, 0.5f);
+        PointF normal = Rotar(new PointF(0f, signoY), angulo);
+        PointF tangente = Rotar(new PointF(1f, 0f), angulo);
+        DibujarEtiquetaSegura(g, etiqueta, mitad, normal, tangente, diseno, etiquetas);
     }
 
-    private static float AnguloBucle(PointF centro, bool esInicial)
+    private static (float Angulo, bool HaciaAbajo) OrientacionBucle(
+        Diseno diseno, string estado, PointF centro)
     {
-        if (esInicial)
+        if (diseno.Slots.TryGetValue(estado, out int hueco))
         {
-            return 25f;
+            return hueco switch
+            {
+                0 => (0f, false),    // superior: arco por encima
+                1 => (-50f, false),  // medio izquierdo: arriba-izquierda
+                2 => (35f, false),   // medio derecho: arriba-derecha, lejos de "Inicio"
+                3 => (0f, true),     // inferior izquierdo: arco por debajo
+                4 => (0f, true),     // inferior derecho: arco por debajo
+                _ => (0f, false)
+            };
         }
 
         double angulo = Math.Atan2(centro.Y, centro.X) * 180d / Math.PI;
-        if (angulo < -90d)
+        if (angulo > 20d && angulo < 160d)
         {
-            return -50f;   // izquierdo superior: lazo hacia arriba-izquierda
+            return (0f, true);
         }
 
-        if (angulo < 0d)
+        if (angulo < -20d && angulo > -160d)
         {
-            return 10f;    // superior: lazo hacia arriba
+            return (0f, false);
         }
 
-        return 180f;       // inferiores: lazo hacia abajo
-    }
-
-    private static void CalcularMitad(out float x, out float y, PointF a, PointF b)
-    {
-        x = (a.X + b.X) / 2f;
-        y = (a.Y + b.Y) / 2f;
+        return (centro.X < 0f ? -50f : 35f, false);
     }
 
     private static PointF Rotar(PointF punto, float grados)
@@ -392,11 +592,10 @@ public sealed class GrafoAutomata : Panel
     private void DibujarEtiquetaSegura(
         Graphics g,
         string texto,
-        PointF basePunto,
+        PointF puntoBase,
         PointF normal,
         PointF tangente,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
+        Diseno diseno,
         List<RectangleF> etiquetas)
     {
         using var fuente = new Font("Segoe UI", 10f, FontStyle.Regular);
@@ -404,23 +603,22 @@ public sealed class GrafoAutomata : Panel
         float ancho = Math.Max(medida.Width, 8f);
         float alto = Math.Max(medida.Height, 10f);
 
-        float[] separaciones = { 18f, 26f, 36f, 48f, 64f };
+        float[] separaciones = { 16f, 24f, 34f, 46f, 60f };
         float[] desplazamientos = { 0f, ancho * 0.65f, -ancho * 0.65f, ancho * 1.3f, -ancho * 1.3f };
-        float[] lados = { 1f, -1f };
 
         foreach (float separacion in separaciones)
         {
-            foreach (float lado in lados)
+            foreach (float lado in new[] { 1f, -1f })
             {
                 foreach (float desplazamiento in desplazamientos)
                 {
                     PointF punto = new(
-                        basePunto.X + normal.X * separacion * lado + tangente.X * desplazamiento,
-                        basePunto.Y + normal.Y * separacion * lado + tangente.Y * desplazamiento);
+                        puntoBase.X + normal.X * separacion * lado + tangente.X * desplazamiento,
+                        puntoBase.Y + normal.Y * separacion * lado + tangente.Y * desplazamiento);
                     var rectangulo = new RectangleF(
                         punto.X - ancho / 2f, punto.Y - alto / 2f, ancho, alto);
 
-                    if (!EsLibre(rectangulo, posiciones, botonInicial, etiquetas))
+                    if (!EsLibre(rectangulo, diseno, etiquetas))
                     {
                         continue;
                     }
@@ -432,10 +630,10 @@ public sealed class GrafoAutomata : Panel
             }
         }
 
-        // Si no hay hueco libre, se usa la separación mayor sobre el lado de la curva.
+        // Último recurso: la mayor separación sobre el lado natural de la curva.
         PointF reserva = new(
-            basePunto.X + normal.X * separaciones[^1],
-            basePunto.Y + normal.Y * separaciones[^1]);
+            puntoBase.X + normal.X * separaciones[^1],
+            puntoBase.Y + normal.Y * separaciones[^1]);
         var rectanguloReserva = new RectangleF(
             reserva.X - ancho / 2f, reserva.Y - alto / 2f, ancho, alto);
         DibujarTextoPlano(g, texto, rectanguloReserva, fuente);
@@ -443,25 +641,23 @@ public sealed class GrafoAutomata : Panel
     }
 
     private static bool EsLibre(
-        RectangleF rectangulo,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
-        List<RectangleF> etiquetas)
+        RectangleF rectangulo, Diseno diseno, List<RectangleF> etiquetas)
     {
-        PointF centro = new(rectangulo.X + rectangulo.Width / 2f, rectangulo.Y + rectangulo.Height / 2f);
+        PointF centroEtiqueta = new(
+            rectangulo.X + rectangulo.Width / 2f,
+            rectangulo.Y + rectangulo.Height / 2f);
         float radioSeguro = RadioEstado + Math.Max(rectangulo.Width, rectangulo.Height) / 2f + 6f;
-        foreach (PointF punto in posiciones.Values)
+
+        foreach (PointF centro in diseno.Posiciones.Values)
         {
-            float dx = centro.X - punto.X;
-            float dy = centro.Y - punto.Y;
-            if (dx * dx + dy * dy < radioSeguro * radioSeguro)
+            if (Distancia(centroEtiqueta, centro) < radioSeguro)
             {
                 return false;
             }
         }
 
-        if (botonInicial is RectangleF boton &&
-            RectangleF.Inflate(boton, 6f, 6f).IntersectsWith(rectangulo))
+        if (RectangleF.Inflate(diseno.BotonInicial, 6f, 6f).IntersectsWith(rectangulo) ||
+            RectangleF.Inflate(diseno.CorredorFlechaInicial, 4f, 4f).IntersectsWith(rectangulo))
         {
             return false;
         }
@@ -478,48 +674,53 @@ public sealed class GrafoAutomata : Panel
     }
 
     private void DibujarEstados(
-        Graphics g,
-        Automata automata,
-        Dictionary<string, PointF> posiciones,
-        RectangleF? botonInicial,
-        Font fuenteBoton)
+        Graphics g, Automata automata, Diseno diseno, Font fuenteBoton)
     {
+        if (automata.EsEstadoConocido(automata.EstadoInicial))
+        {
+            DibujarIndicadorInicial(g, diseno, fuenteBoton);
+        }
+
         foreach (string estado in automata.Estados)
         {
-            PointF centro = posiciones[estado];
-            bool esInicial = string.Equals(estado, automata.EstadoInicial, StringComparison.Ordinal);
+            PointF centro = diseno.Posiciones[estado];
             bool esFinal = automata.EsFinal(estado);
+            var circulo = new RectangleF(
+                centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2f, RadioEstado * 2f);
 
-            if (esInicial && botonInicial is RectangleF boton)
+            g.FillEllipse(esFinal ? _rellenoFinal : _rellenoEstado, circulo);
+
+            if (esFinal)
             {
-                DibujarIndicadorInicial(g, centro, boton, fuenteBoton);
+                g.DrawEllipse(_penFinalExterior, circulo);
+                float radioInterior = RadioEstado - 5f;
+                g.DrawEllipse(_penFinalInterior, new RectangleF(
+                    centro.X - radioInterior, centro.Y - radioInterior,
+                    radioInterior * 2f, radioInterior * 2f));
+            }
+            else
+            {
+                g.DrawEllipse(_penEstados, circulo);
             }
 
-            g.FillEllipse(esFinal ? _rellenoFinal : _rellenoEstado,
-                centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2);
-            g.DrawEllipse(esFinal ? _penFinal : _penEstados,
-                centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2);
-
             using var fuente = new Font("Segoe UI", 12f, FontStyle.Bold);
-            using var brochaTexto = new SolidBrush(esFinal ? Color.White : ColorTexto);
+            using var brocha = new SolidBrush(esFinal ? Color.White : ColorTextoEstado);
             using var formato = new StringFormat
             {
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
             };
-            g.DrawString(estado, fuente, brochaTexto,
-                new RectangleF(centro.X - RadioEstado, centro.Y - RadioEstado, RadioEstado * 2, RadioEstado * 2),
-                formato);
+            g.DrawString(estado, fuente, brocha, circulo, formato);
         }
     }
 
-    private void DibujarIndicadorInicial(Graphics g, PointF centro, RectangleF boton, Font fuente)
+    private void DibujarIndicadorInicial(Graphics g, Diseno diseno, Font fuente)
     {
-        float puntaX = centro.X + RadioEstado + 2f;
-        g.DrawLine(_penInicial, new PointF(boton.Left, centro.Y), new PointF(puntaX, centro.Y));
-        DibujarCabeza(g, new PointF(puntaX, centro.Y), new PointF(-1f, 0f), ColorNodo, LongitudCabezaInicial);
+        g.DrawLine(_penInicial, diseno.InicioFlecha, diseno.FinFlecha);
+        DibujarCabeza(g, diseno.FinFlecha, new PointF(1f, 0f),
+            ColorInicial, LongitudCabezaInicial);
 
-        using (var ruta = CrearRectanguloRedondeado(boton, 7f))
+        using (var ruta = CrearRectanguloRedondeado(diseno.BotonInicial, 5f))
         {
             g.FillPath(_rellenoBotonInicial, ruta);
         }
@@ -530,13 +731,13 @@ public sealed class GrafoAutomata : Panel
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center
         };
-        g.DrawString("Inicio", fuente, brocha, boton, formato);
+        g.DrawString("Inicio", fuente, brocha, diseno.BotonInicial, formato);
     }
 
     private static GraphicsPath CrearRectanguloRedondeado(RectangleF rectangulo, float radio)
     {
         var ruta = new GraphicsPath();
-        float diametro = radio * 2f;
+        float diametro = Math.Min(radio * 2f, Math.Min(rectangulo.Width, rectangulo.Height));
         ruta.AddArc(rectangulo.X, rectangulo.Y, diametro, diametro, 180f, 90f);
         ruta.AddArc(rectangulo.Right - diametro, rectangulo.Y, diametro, diametro, 270f, 90f);
         ruta.AddArc(rectangulo.Right - diametro, rectangulo.Bottom - diametro, diametro, diametro, 0f, 90f);
@@ -546,7 +747,7 @@ public sealed class GrafoAutomata : Panel
     }
 
     private static void DibujarCabeza(
-        Graphics g, PointF punta, PointF direccion, Color color, float longitud = LongitudCabeza)
+        Graphics g, PointF punta, PointF direccion, Color color, float longitud)
     {
         double angulo = Math.Atan2(direccion.Y, direccion.X);
         const double apertura = 0.36;
@@ -564,7 +765,7 @@ public sealed class GrafoAutomata : Panel
 
     private static void DibujarTextoPlano(Graphics g, string texto, RectangleF rectangulo, Font fuente)
     {
-        using var brocha = new SolidBrush(ColorTexto);
+        using var brocha = new SolidBrush(Color.FromArgb(0x26, 0x37, 0x47));
         using var formato = new StringFormat
         {
             Alignment = StringAlignment.Center,
