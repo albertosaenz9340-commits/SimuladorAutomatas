@@ -788,6 +788,178 @@ void VerificarCorreccionesGeometricas()
     Comprobar("Geometría compacta al redimensionar y ampliar", adaptable);
 }
 
+// Verifica que las transiciones reales se reparten entre el interior y el
+// exterior del pentágono, se ordenan de menor a mayor distancia y aumentan su
+// curvatura de forma progresiva sin invadir nodos ni bucles.
+void VerificarConexionesInteriores()
+{
+    static PointF Medio(GrafoAutomata.CurvaInfo c) => new(
+        (c.Inicio.X + 3f * c.Control1.X + 3f * c.Control2.X + c.Fin.X) / 8f,
+        (c.Inicio.Y + 3f * c.Control1.Y + 3f * c.Control2.Y + c.Fin.Y) / 8f);
+
+    static bool DentroDelPentagono(
+        PointF punto, IReadOnlyDictionary<string, PointF> posiciones)
+    {
+        PointF centro = new(
+            (float)posiciones.Values.Average(p => p.X),
+            (float)posiciones.Values.Average(p => p.Y));
+        PointF[] poligono = posiciones.Values
+            .OrderBy(p => Math.Atan2(p.Y - centro.Y, p.X - centro.X))
+            .ToArray();
+        for (int i = 0; i < poligono.Length; i++)
+        {
+            PointF a = poligono[i];
+            PointF b = poligono[(i + 1) % poligono.Length];
+            float cruz = (b.X - a.X) * (punto.Y - a.Y) -
+                         (b.Y - a.Y) * (punto.X - a.X);
+            if (cruz < 0f)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static IEnumerable<PointF> Muestra(GrafoAutomata.CurvaInfo c)
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            float t = i / 20f;
+            float u = 1f - t;
+            yield return new PointF(
+                u * u * u * c.Inicio.X + 3f * u * u * t * c.Control1.X +
+                3f * u * t * t * c.Control2.X + t * t * t * c.Fin.X,
+                u * u * u * c.Inicio.Y + 3f * u * u * t * c.Control1.Y +
+                3f * u * t * t * c.Control2.Y + t * t * t * c.Fin.Y);
+        }
+    }
+
+    Transicion T(string origen, char simbolo, string destino) => new(origen, simbolo, destino);
+    string[] estados = { "s0", "s1", "s2", "s3", "s4" };
+    var referencia = new Automata("Referencia", estados, new[] { 'a', 'b', 'c' },
+        "s0", new[] { "s4" }, new[]
+        {
+            T("s0", 'a', "s1"), T("s0", 'b', "s2"), T("s0", 'c', "s4"),
+            T("s1", 'a', "s1"), T("s1", 'b', "s0"), T("s1", 'c', "s0"),
+            T("s2", 'a', "s4"), T("s2", 'b', "s3"), T("s2", 'c', "s1"),
+            T("s3", 'a', "s4"), T("s3", 'b', "s3"), T("s3", 'c', "s0"),
+            T("s4", 'a', "s3"), T("s4", 'b', "s4"), T("s4", 'c', "s2")
+        });
+    Automata caso = CasosPruebaService.ObtenerCasos()[0].CrearAutomata();
+
+    var geoRef = GrafoAutomata.ObtenerGeometria(referencia, new Size(900, 620));
+    var geoCaso = GrafoAutomata.ObtenerGeometria(caso, new Size(900, 620));
+
+    // El interior se aprovecha de forma significativa con ambos autómatas.
+    int interioresRef = geoRef.Curvas.Count(c => DentroDelPentagono(Medio(c), geoRef.Posiciones));
+    int interioresCaso = geoCaso.Curvas.Count(c => DentroDelPentagono(Medio(c), geoCaso.Posiciones));
+    Comprobar("Conexiones interiores visibles en el pentágono",
+        interioresRef >= 7 && interioresRef >= geoRef.Curvas.Count - 2 &&
+        interioresCaso >= 4,
+        $"referencia={interioresRef}/{geoRef.Curvas.Count}, caso={interioresCaso}/{geoCaso.Curvas.Count}");
+
+    // Las rutas se asignan ordenadas por distancia entre centros.
+    bool ordenadas = true;
+    foreach (var geometria in new[] { geoRef, geoCaso })
+    {
+        float anterior = float.MinValue;
+        foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+        {
+            ordenadas &= curva.DistanciaCentros >= anterior - 0.01f;
+            anterior = curva.DistanciaCentros;
+        }
+    }
+    Comprobar("Trayectorias ordenadas de la más corta a la más larga", ordenadas);
+
+    // Curvatura progresiva: las cortas son compactas y las largas pueden curvarse más.
+    var cortas = geoRef.Curvas.Where(c => c.DistanciaCentros <= 155f).ToList();
+    var largas = geoRef.Curvas.Where(c => c.DistanciaCentros >= 190f).ToList();
+    float mediaCortas = (float)cortas.Average(c => c.Curvatura);
+    float mediaLargas = (float)largas.Average(c => c.Curvatura);
+    Comprobar("Curvatura progresiva según la distancia",
+        cortas.Count >= 5 && largas.Count >= 3 && mediaCortas < mediaLargas,
+        $"media cortas={mediaCortas:0.0}, media largas={mediaLargas:0.0}");
+
+    int rectas = cortas.Count(c => c.Curvatura < 0.5f);
+    Comprobar("Conexiones cortas directas o muy suaves",
+        rectas >= 2 && cortas.All(c => c.Curvatura <= 14f),
+        $"rectas={rectas}, máxima corta={cortas.Max(c => c.Curvatura):0.0}");
+    Comprobar("Conexiones largas con curvatura moderada",
+        largas.Any(c => c.Curvatura >= 8f) && largas.All(c => c.Curvatura <= 26f),
+        $"máxima larga={largas.Max(c => c.Curvatura):0.0}");
+
+    // Ninguna ruta atraviesa un nodo que no sea su extremo.
+    bool sinNodosAtravesados = true;
+    foreach (var geometria in new[] { geoRef, geoCaso })
+    {
+        foreach (GrafoAutomata.CurvaInfo curva in geometria.Curvas)
+        {
+            foreach (PointF punto in Muestra(curva))
+            {
+                foreach ((string estado, PointF centro) in geometria.Posiciones)
+                {
+                    if (estado != curva.Origen && estado != curva.Destino)
+                    {
+                        float dx = punto.X - centro.X;
+                        float dy = punto.Y - centro.Y;
+                        sinNodosAtravesados &=
+                            Math.Sqrt(dx * dx + dy * dy) >= GrafoAutomata.RadioEstado;
+                    }
+                }
+            }
+        }
+    }
+    Comprobar("Ninguna transición atraviesa otro nodo", sinNodosAtravesados);
+
+    // Todas las flechas siguen representando transiciones reales de δ.
+    bool direccionesReales = geoCaso.Curvas.Count == 5;
+    foreach (GrafoAutomata.CurvaInfo curva in geoCaso.Curvas)
+    {
+        foreach (string simbolo in curva.Etiqueta.Replace(" ", "").Split(','))
+        {
+            direccionesReales &= simbolo.Length == 1 &&
+                caso.ObtenerDestino(curva.Origen, simbolo[0]) == curva.Destino;
+        }
+    }
+    Comprobar("Dirección de cada flecha según δ", direccionesReales);
+
+    // En el autómata de la captura no se cruzan rutas que no compartan extremo.
+    bool sinCruces = true;
+    for (int i = 0; i < geoCaso.Curvas.Count && sinCruces; i++)
+    {
+        for (int j = i + 1; j < geoCaso.Curvas.Count; j++)
+        {
+            GrafoAutomata.CurvaInfo a = geoCaso.Curvas[i];
+            GrafoAutomata.CurvaInfo b = geoCaso.Curvas[j];
+            if (a.Origen == b.Origen || a.Origen == b.Destino ||
+                a.Destino == b.Origen || a.Destino == b.Destino)
+            {
+                continue;
+            }
+
+            PointF[] muestraA = Muestra(a).ToArray();
+            foreach (PointF puntoB in Muestra(b))
+            {
+                foreach (PointF puntoA in muestraA)
+                {
+                    float dx = puntoA.X - puntoB.X;
+                    float dy = puntoA.Y - puntoB.Y;
+                    if (Math.Sqrt(dx * dx + dy * dy) < 5f)
+                    {
+                        sinCruces = false;
+                        break;
+                    }
+                }
+                if (!sinCruces)
+                {
+                    break;
+                }
+            }
+        }
+    }
+    Comprobar("Sin cruces innecesarios entre transiciones", sinCruces);
+}
+
 // Comprueba que el texto escrito en el cuadro de entrada del Módulo 3 se ve
 // completo (el problema era una fila fija que recortaba la parte inferior).
 void VerificarCajaEntradaReconocimiento()
@@ -1020,6 +1192,9 @@ try
 
     Console.WriteLine("=== CORRECCIONES GEOMÉTRICAS (A-F) ===");
     VerificarCorreccionesGeometricas();
+
+    Console.WriteLine("=== CONEXIONES INTERIORES Y ORDEN DE RUTAS ===");
+    VerificarConexionesInteriores();
 
     Console.WriteLine("=== AUDITORÍA DE TEXTOS ===");
     servicio.Establecer(a1);

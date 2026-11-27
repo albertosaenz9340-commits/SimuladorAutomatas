@@ -75,7 +75,9 @@ public sealed class GrafoAutomata : Panel
         PointF Control1,
         PointF Control2,
         PointF Fin,
-        RectangleF EtiquetaRectangulo);
+        RectangleF EtiquetaRectangulo,
+        float DistanciaCentros,
+        float Curvatura);
 
     public readonly record struct BucleInfo(
         string Estado,
@@ -148,7 +150,7 @@ public sealed class GrafoAutomata : Panel
             ZonaInicial = geometria.Diseno.ZonaInicial,
             Curvas = geometria.Aristas.Select(a => new CurvaInfo(
                 a.Origen, a.Destino, a.Etiqueta, a.Inicio, a.Control1, a.Control2, a.Fin,
-                a.RectanguloEtiqueta ?? RectangleF.Empty)).ToArray(),
+                a.RectanguloEtiqueta ?? RectangleF.Empty, a.DistanciaCentros, a.Curvatura)).ToArray(),
             Bucles = geometria.Bucles.Select(b => new BucleInfo(
                 b.Estado, b.Etiqueta, b.Inicio, b.Control1, b.Control2, b.Fin, b.Eje,
                 b.RectanguloEtiqueta ?? RectangleF.Empty)).ToArray(),
@@ -305,6 +307,8 @@ public sealed class GrafoAutomata : Panel
         public PointF Fin;
         public PointF Normal;
         public float Signo;
+        public float DistanciaCentros;
+        public float Curvatura;
         public RectangleF? RectanguloEtiqueta;
     }
 
@@ -459,83 +463,188 @@ public sealed class GrafoAutomata : Panel
     private static void CalcularAristas(
         Automata automata, Diseno diseno, List<Arista> aristas)
     {
-        var dibujadas = new HashSet<(string Origen, string Destino)>();
-        var signosReciprocos = new Dictionary<(string Origen, string Destino), float>();
-
+        // 1. Se toman sólo las transiciones reales de δ y se mide la distancia
+        // entre los centros de origen y destino.
+        var candidatos = new List<(string Origen, string Destino, float Distancia, string Etiqueta)>();
         foreach (string origen in automata.Estados)
         {
             foreach (string destino in automata.Estados)
             {
                 if (string.Equals(origen, destino, StringComparison.Ordinal))
                 {
-                    // Los bucles se calculan en CalcularBucles; dibujarlos aquí
-                    // como Bézier degenerada duplicaría aristas y etiquetas.
+                    // Los bucles se tratan en CalcularBucles.
                     continue;
                 }
 
                 List<char> simbolos = automata.Alfabeto
                     .Where(s => automata.ObtenerDestino(origen, s) == destino)
                     .ToList();
-
-                if (simbolos.Count == 0 || !dibujadas.Add((origen, destino)))
+                if (simbolos.Count == 0)
                 {
                     continue;
                 }
 
-                bool reciproca = automata.Alfabeto
-                    .Any(s => automata.ObtenerDestino(destino, s) == origen);
-                float magnitud = CalcularMagnitud(
-                    Distancia(diseno.Posiciones[origen], diseno.Posiciones[destino]), reciproca);
+                candidatos.Add((origen, destino,
+                    Distancia(diseno.Posiciones[origen], diseno.Posiciones[destino]),
+                    string.Join(", ", simbolos)));
+            }
+        }
 
-                Arista positiva = ConstruirArista(
-                    origen, destino, diseno.Posiciones, magnitud, 1f);
-                Arista negativa = ConstruirArista(
-                    origen, destino, diseno.Posiciones, magnitud, -1f);
+        // 2 y 3. Orden de la conexión más corta a la más larga: las rutas
+        // directas se asignan primero; las largas usan el interior restante.
+        candidatos.Sort((a, b) => a.Distancia.CompareTo(b.Distancia));
 
-                float signo;
-                if (reciproca)
+        PointF[] interior = PoligonoInterior(diseno.Posiciones);
+        var signosReciprocos = new Dictionary<(string Origen, string Destino), float>();
+
+        foreach ((string origen, string destino, float distancia, string etiqueta) in candidatos)
+        {
+            bool reciproca = automata.Alfabeto
+                .Any(s => automata.ObtenerDestino(destino, s) == origen);
+            float baseMagnitud = CalcularMagnitud(distancia, reciproca);
+
+            float signo;
+            if (reciproca)
+            {
+                var llave = (origen, destino);
+                if (!signosReciprocos.ContainsKey(llave))
                 {
-                    var llave = (origen, destino);
-                    if (!signosReciprocos.ContainsKey(llave))
+                    // La normal se invierte con la dirección: el mismo signo en
+                    // ambos sentidos sitúa las curvas en lados opuestos del eje.
+                    float mejorPar = float.MaxValue;
+                    float signoPar = 1f;
+                    foreach (float candidato in new[] { 1f, -1f })
                     {
-                        // La normal se invierte al invertir la dirección: usar el
-                        // mismo signo en ambos sentidos coloca las curvas en lados
-                        // opuestos del eje. Signos opuestos las superpondrían.
-                        float comboPos = Puntuacion(positiva, diseno, origen, destino) +
-                                          Puntuacion(ConstruirArista(destino, origen,
-                                              diseno.Posiciones, magnitud, 1f),
-                                              diseno, destino, origen);
-                        float comboNeg = Puntuacion(negativa, diseno, origen, destino) +
-                                         Puntuacion(ConstruirArista(destino, origen,
-                                             diseno.Posiciones, magnitud, -1f),
-                                             diseno, destino, origen);
-                        float baseSigno = comboPos >= comboNeg ? 1f : -1f;
-                        signosReciprocos[llave] = baseSigno;
-                        signosReciprocos[(destino, origen)] = baseSigno;
+                        float puntuacionPar = 0f;
+                        foreach (float factor in new[] { 1f, 1.35f })
+                        {
+                            Arista ida = ConstruirArista(origen, destino, diseno.Posiciones,
+                                baseMagnitud * factor, candidato);
+                            Arista vuelta = ConstruirArista(destino, origen, diseno.Posiciones,
+                                baseMagnitud * factor, candidato);
+                            puntuacionPar +=
+                                Puntuacion(ida, diseno, origen, destino, aristas, interior) +
+                                Puntuacion(vuelta, diseno, destino, origen, aristas, interior);
+                        }
+
+                        if (puntuacionPar < mejorPar)
+                        {
+                            mejorPar = puntuacionPar;
+                            signoPar = candidato;
+                        }
                     }
 
-                    signo = signosReciprocos[llave];
-                }
-                else
-                {
-                    signo = Puntuacion(positiva, diseno, origen, destino) >=
-                            Puntuacion(negativa, diseno, origen, destino) ? 1f : -1f;
+                    signosReciprocos[llave] = signoPar;
+                    signosReciprocos[(destino, origen)] = signoPar;
                 }
 
-                Arista elegida = signo > 0 ? positiva : negativa;
-                elegida.Origen = origen;
-                elegida.Destino = destino;
-                elegida.Etiqueta = string.Join(", ", simbolos);
-                aristas.Add(elegida);
+                signo = signosReciprocos[llave];
             }
+            else
+            {
+                signo = 1f;
+            }
+
+            // 4 y 5. Las cortas prueban primero la línea recta y curvas muy
+            // suaves; las largas pueden adoptar curvatura mayor si hace falta.
+            float[] factores = reciproca
+                ? new[] { 1f, 1.25f, 1.55f }
+                : new[] { 0f, 0.5f, 1f, 1.35f };
+            float[] lados = reciproca ? new[] { signo } : new[] { 1f, -1f };
+
+            Arista? mejorArista = null;
+            float mejorPuntuacion = float.MaxValue;
+            foreach (float lado in lados)
+            {
+                foreach (float factor in factores)
+                {
+                    float magnitud = baseMagnitud * factor;
+                    Arista propuesta = ConstruirArista(
+                        origen, destino, diseno.Posiciones, magnitud, lado);
+                    float costeCurvatura = magnitud * (0.35f +
+                        0.25f * (1f - Math.Clamp(distancia / 450f, 0f, 1f)));
+                    float puntuacion = Puntuacion(
+                        propuesta, diseno, origen, destino, aristas, interior) + costeCurvatura;
+                    if (puntuacion < mejorPuntuacion)
+                    {
+                        mejorPuntuacion = puntuacion;
+                        mejorArista = propuesta;
+                    }
+                }
+            }
+
+            if (mejorArista is null)
+            {
+                continue;
+            }
+
+            mejorArista.Origen = origen;
+            mejorArista.Destino = destino;
+            mejorArista.Etiqueta = etiqueta;
+            mejorArista.DistanciaCentros = distancia;
+            aristas.Add(mejorArista);
         }
     }
 
     private static float CalcularMagnitud(float distanciaCentros, bool reciproca)
     {
         float util = Math.Max(20f, distanciaCentros - RadioEstado * 2f);
-        float magnitud = Math.Clamp(util * 0.12f, 8f, 20f);
-        return reciproca ? Math.Min(26f, magnitud * 1.25f) : magnitud;
+        float magnitud = Math.Clamp(util * 0.055f, 3f, 18f);
+        return reciproca ? Math.Min(24f, magnitud + 7f) : magnitud;
+    }
+
+    /// <summary>Polígono de centroides en orden angular: el interior del grafo.</summary>
+    private static PointF[] PoligonoInterior(IReadOnlyDictionary<string, PointF> posiciones)
+    {
+        if (posiciones.Count < 3)
+        {
+            return Array.Empty<PointF>();
+        }
+
+        PointF centro = new(
+            (float)posiciones.Values.Average(p => p.X),
+            (float)posiciones.Values.Average(p => p.Y));
+        return posiciones.Values
+            .OrderBy(p => Math.Atan2(p.Y - centro.Y, p.X - centro.X))
+            .ToArray();
+    }
+
+    /// <summary>Distancia a la que un punto queda fuera del polígono interior.</summary>
+    private static float DistanciaFueraPoligono(PointF punto, PointF[] poligono)
+    {
+        if (poligono.Length < 3)
+        {
+            return 0f;
+        }
+
+        float area = 0f;
+        for (int i = 0; i < poligono.Length; i++)
+        {
+            PointF a = poligono[i];
+            PointF b = poligono[(i + 1) % poligono.Length];
+            area += a.X * b.Y - b.X * a.Y;
+        }
+        float orientacion = area >= 0f ? 1f : -1f;
+
+        float maximo = 0f;
+        for (int i = 0; i < poligono.Length; i++)
+        {
+            PointF a = poligono[i];
+            PointF b = poligono[(i + 1) % poligono.Length];
+            float dx = b.X - a.X;
+            float dy = b.Y - a.Y;
+            float largo = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (largo < 1f)
+            {
+                continue;
+            }
+
+            float cruzado = orientacion *
+                (dx * (punto.Y - a.Y) - dy * (punto.X - a.X)) / largo;
+            maximo = Math.Max(maximo, -cruzado);
+        }
+
+        return maximo;
     }
 
     /// <summary>
@@ -560,7 +669,8 @@ public sealed class GrafoAutomata : Panel
             {
                 Inicio = origenCentro, Fin = destinoCentro,
                 Control1 = origenCentro, Control2 = destinoCentro,
-                Normal = new PointF(0f, -1f), Signo = signo
+                Normal = new PointF(0f, -1f), Signo = signo,
+                Curvatura = Math.Abs(magnitud)
             };
         }
 
@@ -571,6 +681,14 @@ public sealed class GrafoAutomata : Panel
         float util = Math.Max(10f, longitud - RadioEstado * 2f - 1f);
         PointF control1 = Sumar(Sumar(inicio, Escalar(u, util / 3f)), Escalar(normal, magnitud * signo));
         PointF control2 = Sumar(Sumar(inicio, Escalar(u, util * 2f / 3f)), Escalar(normal, magnitud * signo));
+
+        // Los vecinos del pentágono se unen con cuerdas sobre el perímetro.
+        // Un ligero empuje de los controles hacia el centroide las convierte en
+        // conexiones interiores directas sin inventar transiciones.
+        PointF centroGrafo = new(
+            (float)posiciones.Values.Average(p => p.X),
+            (float)posiciones.Values.Average(p => p.Y));
+        float insercion = Math.Clamp(util * 0.07f, 6f, 14f);
 
         for (int i = 0; i < 4; i++)
         {
@@ -587,10 +705,12 @@ public sealed class GrafoAutomata : Panel
 
             PointF nuevoU = new(nx / largo, ny / largo);
             PointF nuevaNormal = new(-nuevoU.Y, nuevoU.X);
-            control1 = Sumar(Sumar(inicio, Escalar(nuevoU, largo / 3f)),
-                Escalar(nuevaNormal, magnitud * signo));
-            control2 = Sumar(Sumar(inicio, Escalar(nuevoU, largo * 2f / 3f)),
-                Escalar(nuevaNormal, magnitud * signo));
+            PointF haciaCentro = Normalizar(Restar(centroGrafo,
+                new PointF((inicio.X + fin.X) / 2f, (inicio.Y + fin.Y) / 2f)));
+            control1 = Sumar(Sumar(Sumar(inicio, Escalar(nuevoU, largo / 3f)),
+                Escalar(nuevaNormal, magnitud * signo)), Escalar(haciaCentro, insercion));
+            control2 = Sumar(Sumar(Sumar(inicio, Escalar(nuevoU, largo * 2f / 3f)),
+                Escalar(nuevaNormal, magnitud * signo)), Escalar(haciaCentro, insercion));
             normal = nuevaNormal;
         }
 
@@ -601,19 +721,28 @@ public sealed class GrafoAutomata : Panel
             Control2 = control2,
             Fin = fin,
             Normal = normal,
-            Signo = signo
+            Signo = signo,
+            Curvatura = Math.Abs(magnitud)
         };
     }
 
-    private static float Puntuacion(Arista arista, Diseno diseno, string origen, string destino)
+    private static float Puntuacion(
+        Arista arista,
+        Diseno diseno,
+        string origen,
+        string destino,
+        List<Arista> aristas,
+        PointF[] interior)
     {
-        float puntuacion = float.MaxValue;
-        for (int i = 1; i < 9; i++)
+        float penalizacion = 0f;
+        for (int i = 1; i <= 11; i++)
         {
-            PointF punto = PuntoBezier(arista.Inicio, arista.Control1, arista.Control2, arista.Fin, i / 9f);
+            PointF punto = PuntoBezier(
+                arista.Inicio, arista.Control1, arista.Control2, arista.Fin, i / 12f);
+
             if (diseno.ZonaInicial.Contains(punto))
             {
-                puntuacion = -100f;
+                penalizacion += 250f;
             }
 
             foreach ((string estado, PointF centro) in diseno.Posiciones)
@@ -623,11 +752,27 @@ public sealed class GrafoAutomata : Panel
                     continue;
                 }
 
-                puntuacion = Math.Min(puntuacion, Distancia(punto, centro) - RadioEstado - 4f);
+                float holgura = Distancia(punto, centro) - RadioEstado;
+                if (holgura < 6f)
+                {
+                    penalizacion += (6f - holgura) * 18f;
+                }
+            }
+
+            // El interior del pentágono tiene prioridad sobre el perímetro.
+            penalizacion += DistanciaFueraPoligono(punto, interior) * 1.6f;
+
+            foreach (Arista otra in aristas)
+            {
+                float separacion = DistanciaAArista(punto, otra);
+                if (separacion < 9f)
+                {
+                    penalizacion += (9f - separacion) * 4f;
+                }
             }
         }
 
-        return puntuacion;
+        return penalizacion;
     }
 
     private static void CalcularBucles(

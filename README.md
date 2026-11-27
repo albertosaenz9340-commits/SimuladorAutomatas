@@ -193,7 +193,7 @@ Al consumir todos los símbolos de `w` desde `q0`, se obtiene un estado alcanzad
 - `q0` pertenezca a `Q`.
 - Todo estado final pertenezca a `Q`.
 
-**Resultados.** Pestaña *Representación formal* con la quíntupla `M = (Q, Σ, δ, q0, F)` completa, sus cinco componentes por separado y la lista de `δ`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con título centrado *Autómata finito determinista*, cinco nodos en pentágono irregular (azul pastel `#DCEAF8`, contorno `#34495E`) con `q0` en el flanco derecho, estados finales verdes con doble circunferencia y texto blanco, indicador azul *Inicio* situado encima de una flecha que sale hacia la derecha desde `q0` (ancho medido del texto para no recortarlo), transiciones como arcos Bézier compactos con puntas triangulares tangentes al perímetro destino, bucles exteriores pequeños y etiquetas ancladas al punto medio de cada curva, agrupadas por origen-destino y colocadas evitando colisiones con nodos, botón y otras etiquetas; la zona derecha de `q0` queda reservada en exclusiva para *Inicio*, sin que bucles ni transiciones la invadan. Conserva el desplazamiento arrastrando y el zoom uniforme con la rueda. La captura real del caso de cinco estados, renderizada con `DrawToBitmap`, se incluye en `Documentacion - Ejemplos de entrada/Diagrama_verificado.png`. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
+**Resultados.** Pestaña *Representación formal* con la quíntupla `M = (Q, Σ, δ, q0, F)` completa, sus cinco componentes por separado y la lista de `δ`; pestaña *Tabla de transiciones* con estados en filas, símbolos en columnas, `→` para el inicial y `*` para los finales; pestaña *Diagrama (GDI+)* con título centrado *Autómata finito determinista*, cinco nodos en pentágono irregular (azul pastel `#DCEAF8`, contorno `#34495E`) con `q0` en el flanco derecho, estados finales verdes con doble circunferencia y texto blanco, indicador azul *Inicio* situado encima de una flecha que sale hacia la derecha desde `q0` (ancho medido del texto para no recortarlo), transiciones como arcos Bézier compactos con puntas triangulares tangentes al perímetro destino, priorizando las rutas interiores directas o suavemente curvas y asignándolas de menor a mayor distancia entre centros con curvatura progresiva, bucles exteriores pequeños y etiquetas ancladas al punto medio de cada curva, agrupadas por origen-destino y colocadas evitando colisiones con nodos, botón y otras etiquetas; la zona derecha de `q0` queda reservada en exclusiva para *Inicio*, sin que bucles ni transiciones la invadan. Conserva el desplazamiento arrastrando y el zoom uniforme con la rueda. La captura real del caso de cinco estados, renderizada con `DrawToBitmap`, se incluye en `Documentacion - Ejemplos de entrada/Diagrama_verificado.png`. La vista previa se actualiza cuando cambia la definición. El cuadro *Casos de prueba* permite cargar los cuatro ejemplos incluidos.
 
 ### Módulo 2. Búsqueda de las cinco palabras más cortas
 
@@ -259,7 +259,7 @@ En la ventana *Consola del administrador de paquetes* o en una terminal de Power
 dotnet run --project Pruebas/Pruebas.csproj
 ```
 
-Resultado verificado: **55 comprobaciones, 0 fallos**.
+Resultado verificado: **91 comprobaciones, 0 fallos**.
 
 ### 7. Solución de problemas habituales
 
@@ -330,7 +330,7 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 │   └── Transicion.cs                Transición
 ├── Pruebas/
 │   ├── Pruebas.csproj               Proyecto de consola de verificación
-│   └── Program.cs                   55 comprobaciones automáticas
+│   └── Program.cs                   91 comprobaciones automáticas
 ├── Services/
 │   ├── AutomataService.cs           Instancia compartida
 │   ├── BusquedaPalabrasService.cs   Búsqueda ordenada
@@ -416,7 +416,7 @@ SimuladorAutomatas/                   (carpeta raíz del proyecto)
 | Búsqueda | Mensaje de «no se encontraron palabras aceptadas» | Sí |
 | `aaa`, `ε` | Rechazadas | Sí |
 
-Además se verificaron las condiciones de validación (incluida la exigencia de exactamente cinco nodos), el reemplazo de la quíntupla en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (55 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
+Además se verificaron las condiciones de validación (incluida la exigencia de exactamente cinco nodos), el reemplazo de la quíntupla en el servicio compartido, la creación de los cuatro formularios, el dibujo del diagrama sin excepciones, el acoplamiento del lienzo GDI+ y el margen del texto indicador inicial, el texto visible completo en el cuadro de entrada del Módulo 3, la auditoría de textos sin recortes en el tamaño mínimo de cada ventana y el redimensionado real (tamaño mínimo, maximizado y tamaño grande) sin errores de layout. Comandos ejecutados: `dotnet restore`, `dotnet build` (0 errores y 0 advertencias), `dotnet run --project Pruebas/Pruebas.csproj` (91 comprobaciones, 0 fallos) y arranque del ejecutable en Windows con ventana principal detectada.
 
 ## 12.10. Limitaciones y consideraciones
 
